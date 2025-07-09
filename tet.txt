@@ -1,14 +1,15 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 MAPA="plik.map"
 KATALOG="./dane"
 BAZA="test"
 SQLTMP="zaladuj_tmp.sql"
 DEPENDENCJE="zaleznosci.tmp"
-WSZYSTKIE_TABELKI="tabelki.tmp"
 KOLEJNOSC="kolejnosc.tmp"
+WSZYSTKIE="tabelki.tmp"
+VISITED=".visited"
 
-# 1. Pobierz zależności do pliku
+# 1. Pobierz zależności: CHILD | PARENT
 dbaccess "$BAZA" <<EOF > "$DEPENDENCJE"
 UNLOAD TO stdout DELIMITER '|'
 SELECT c.tabname, p.tabname
@@ -20,57 +21,43 @@ JOIN systables p ON p.tabid = pc.tabid
 WHERE cc.constrtype = 'R';
 EOF
 
-# 2. Wyciągnij wszystkie tabele z pliku.map
-awk -F'|' '{print $2}' "$MAPA" | sort -u > "$WSZYSTKIE_TABELKI"
+# 2. Lista wszystkich tabel z pliku mapy
+awk -F'|' '{print $2}' "$MAPA" | sort -u > "$WSZYSTKIE"
+> "$KOLEJNOSC"
+> "$VISITED"
 
-# 3. Sortowanie zależności w Bashu — topologicznie
-# Działa tylko jeśli nie ma cykli!
-
-# Stwórz graf zależności (parent -> children)
-declare -A CHILDREN
-declare -A PARENTS
-declare -A VISITED
-
-# Załaduj zależności
-while IFS='|' read -r child parent; do
-  CHILDREN["$parent"]+="$child "
-  PARENTS["$child"]+="$parent "
-done < "$DEPENDENCJE"
-
-# Funkcja rekurencyjna DFS
+# 3. DFS bez funkcji bash (rekurencja przez plik)
 visit() {
-  local tabela="$1"
-  [[ "${VISITED[$tabela]}" == 1 ]] && return
-  VISITED["$tabela"]=1
-  for child in ${CHILDREN["$tabela"]}; do
-    visit "$child"
+  tabela="$1"
+  grep -qx "$tabela" "$VISITED" && return
+  echo "$tabela" >> "$VISITED"
+
+  awk -F'|' -v p="$tabela" '$2 == p { print $1 }' "$DEPENDENCJE" | while read dziecko; do
+    [ -n "$dziecko" ] && visit "$dziecko"
   done
+
   echo "$tabela" >> "$KOLEJNOSC"
 }
 
-# Rozpocznij od tabel, które nie mają parentów
-> "$KOLEJNOSC"
-for tabela in $(cat "$WSZYSTKIE_TABELKI"); do
-  if [[ -z "${PARENTS[$tabela]}" ]]; then
-    visit "$tabela"
-  fi
-done
+# 4. Odpal DFS na wszystkich tabelach
+while read tabela; do
+  awk -F'|' -v t="$tabela" '$1 == t' "$DEPENDENCJE" | grep -q . || visit "$tabela"
+done < "$WSZYSTKIE"
 
-# 4. Generuj plik SQL
+# 5. Stwórz SQL: najpierw TRUNCATE w odwrotnej kolejności
 > "$SQLTMP"
+awk ' { l[NR]=$0 } END { for (i=NR;i>=1;i--) print "TRUNCATE TABLE " l[i] ";" }' "$KOLEJNOSC" >> "$SQLTMP"
 
-# TRUNCATE w odwrotnej kolejności
-tac "$KOLEJNOSC" | while read tabela; do
-  echo "TRUNCATE TABLE $tabela;" >> "$SQLTMP"
-done
-
-# LOAD w poprawnej kolejności
+# 6. Dodaj LOAD
 while read tabela; do
   grep -F "|$tabela" "$MAPA" | while IFS='|' read -r plik tab; do
     echo "LOAD FROM '$KATALOG/$plik' DELIMITER '|' INSERT INTO $tab;" >> "$SQLTMP"
   done
 done < "$KOLEJNOSC"
 
-# 5. Wykonaj w dbaccess
-echo "Wykonuję TRUNCATE i LOAD wg zależności (bez Pythona)..."
+# 7. Wykonaj
+echo "Wykonuję dbaccess z pliku $SQLTMP..."
 dbaccess "$BAZA" "$SQLTMP"
+
+# 8. Sprzątanie
+rm -f "$VISITED" "$WSZYSTKIE" "$DEPENDENCJE"
