@@ -1,6 +1,3 @@
-awk '
-BEGIN { indent = 0 }
-/<[^\/!?][^>]*[^\/]>/ { for(i=0;i<indent;i++) printf "  "; print; indent++ }
-/<\/[^>]+>/ { indent--; for(i=0;i<indent;i++) printf "  "; print }
-/<[^>]+\/>/ { for(i=0;i<indent;i++) printf "  "; print }
-' <(sed "s/></>\n</g" plik.xml)
+last(/test2/custom.count_files[{#KATALOG}]) > (avg(/test2/custom.count_files[{#KATALOG}],1h) * 2)
+and
+avg(/test2/custom.count_files[{#KATALOG}],1h) > 0
