@@ -1,3 +1,34 @@
-last(/test2/custom.count_files[{#KATALOG}]) > (avg(/test2/custom.count_files[{#KATALOG}],1h) * 2)
-and
-avg(/test2/custom.count_files[{#KATALOG}],1h) > 0
+#!/usr/bin/ksh
+
+CHCK_MIN_UID=200
+CHCK_EXC_UID=""
+
+echo "{"
+echo "  \"data\":["
+
+FIRST=1
+lsuser -c -a id ALL | grep -v '^#' | awk -F: -v min=$CHCK_MIN_UID -v excl="$CHCK_EXC_UID" '
+{
+    uid=$2
+    skip=0
+    if (uid >= min) {
+        n=split(excl, arr, " ")
+        for (i=1; i<=n; i++) {
+            if (uid == arr[i]) {
+                skip=1
+                break
+            }
+        }
+        if (skip==0) {
+            if (first==1) {
+                printf "    ,\n"
+            }
+            printf "    { \"{#USERNAME}\":\"%s\" }", $1
+            first=1
+        }
+    }
+}
+END { print "" }'
+
+echo "  ]"
+echo "}"
