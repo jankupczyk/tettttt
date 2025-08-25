@@ -1,4 +1,8 @@
+cd /app/report
+
 for ym in $(ls -l --time-style=+%Y-%m | awk '{print $6}' | grep -v '^2025-' | sort -u); do
-    files=$(ls -l --time-style=+%Y-%m | awk -v m="$ym" '$6==m {print $7}')
-    zip "/app/${ym}.zip" $files && rm -f $files
+    find . -maxdepth 1 -type f -newermt "${ym}-01" ! -newermt "$(date -d "${ym}-01 +1 month" +%Y-%m-%d)" \
+        -print | zip "/app/${ym}.zip" -@
+    find . -maxdepth 1 -type f -newermt "${ym}-01" ! -newermt "$(date -d "${ym}-01 +1 month" +%Y-%m-%d)" \
+        -delete
 done
