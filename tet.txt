@@ -4,7 +4,6 @@ echo "{"
 echo "  \"data\":["
 
 YEAR_AGO=$(perl -e 'print time() - 365*24*3600, "\n"')
-
 FIRST=1
 
 lsuser -c -a id ALL | grep -v '^#' | cut -d= -f2,1 | perl -e '
@@ -12,20 +11,22 @@ use strict;
 use warnings;
 
 my $year_ago = $ENV{YEAR_AGO};
-my $first=1;
+my $first = 1;
 
 while (<>) {
     chomp;
-    my ($uid, $user) = split(/:/, $_);
-    next unless $uid =~ /^\d+$/;
+    my ($user, $uid) = split(/:/, $_);   # $user = nazwa użytkownika, $uid = UID
+    next unless defined $user && $user ne "";
 
-    my $ts = `lsuser -a time_last_login $user 2>/dev/null`;
-    chomp($ts);
-    $ts =~ s/time_last_login=//;
-    next unless $ts =~ /^\d+$/;  # pomijamy nieaktywnych
+    # pobieramy time_last_login
+    my $ts_line = `lsuser -a time_last_login $user 2>/dev/null`;
+    chomp($ts_line);
+    $ts_line =~ s/time_last_login=//;
+    next unless $ts_line =~ /^\d+$/;
+    next if $ts_line == 0;           # nigdy się nie logował
+    next if $ts_line < $year_ago;    # starsze niż rok
 
-    next if $ts < $year_ago;
-
+    # generowanie JSON
     if ($first==0) { print ",\n"; }
     print "    { \"{#USERNAME}\":\"$user\" }";
     $first=0;
