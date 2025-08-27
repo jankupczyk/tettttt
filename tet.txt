@@ -1,25 +1,32 @@
-#!/bin/ksh
+#!/usr/bin/ksh
 
-USERLIST=""
+CHCK_MIN_UID=201
+CHCK_EXC_UID="1 2 50 199 250 300 400 ..."  # tutaj Twoja długa lista
 
-if [ ! -f "$USERLIST" ]; then
-    echo "ERROR: $USERLIST no such file!"
-    exit 1
-fi
+echo "{"
+echo "  \"data\":["
 
-while read u
-do
-    [ -z "$u" ] && continue
-    [[ "$u" = \#* ]] && continue
+FIRST=1
 
-    ts=$(lsuser -a time_last_login "$u" 2>/dev/null | awk -F= '{print $2}')
+lsuser -c -a id ALL | grep -v '^#' | cut -d= -f2,1 | perl -e '
+  use strict;
+  use warnings;
 
-    if [ -z "$ts" ]; then
-        echo "$u -> no such user!!"
-    elif [ "$ts" -gt 0 ] 2>/dev/null; then
-        data=$(perl -e "print scalar localtime($ts),\"\n\";")
-        echo "$u -> $data"
-    else
-        echo "$u -> never logged! --skip!"
-    fi
-done < "$USERLIST"
+  my $first=1;
+  # lista wykluczonych UID z zmiennej środowiskowej
+  my %excl = map { $_ => 1 } split(/\s+/, $ENV{CHCK_EXC_UID});
+
+  while (<>) {
+      chomp;
+      my ($uid, $user) = split(/:/, $_);
+      next unless $uid >= $ENV{CHCK_MIN_UID};
+      next if exists $excl{$uid};
+
+      if ($first==0) { print ",\n"; }
+      print "    { \"{#USERNAME}\":\"$user\" }";
+      $first=0;
+  }
+  print "\n";
+'
+echo "  ]"
+echo "}"
