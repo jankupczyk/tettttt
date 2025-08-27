@@ -1,32 +1,37 @@
-#!/usr/bin/ksh
-
-CHCK_MIN_UID=201
-CHCK_EXC_UID="1 2 50 199 250 300 400 ..."  # tutaj Twoja długa lista
+#!/bin/ksh
 
 echo "{"
 echo "  \"data\":["
 
+YEAR_AGO=$(perl -e 'print time() - 365*24*3600, "\n"')
+
 FIRST=1
 
 lsuser -c -a id ALL | grep -v '^#' | cut -d= -f2,1 | perl -e '
-  use strict;
-  use warnings;
+use strict;
+use warnings;
 
-  my $first=1;
-  # lista wykluczonych UID z zmiennej środowiskowej
-  my %excl = map { $_ => 1 } split(/\s+/, $ENV{CHCK_EXC_UID});
+my $year_ago = $ENV{YEAR_AGO};
+my $first=1;
 
-  while (<>) {
-      chomp;
-      my ($uid, $user) = split(/:/, $_);
-      next unless $uid >= $ENV{CHCK_MIN_UID};
-      next if exists $excl{$uid};
+while (<>) {
+    chomp;
+    my ($uid, $user) = split(/:/, $_);
+    next unless $uid =~ /^\d+$/;
 
-      if ($first==0) { print ",\n"; }
-      print "    { \"{#USERNAME}\":\"$user\" }";
-      $first=0;
-  }
-  print "\n";
+    my $ts = `lsuser -a time_last_login $user 2>/dev/null`;
+    chomp($ts);
+    $ts =~ s/time_last_login=//;
+    next unless $ts =~ /^\d+$/;  # pomijamy nieaktywnych
+
+    next if $ts < $year_ago;
+
+    if ($first==0) { print ",\n"; }
+    print "    { \"{#USERNAME}\":\"$user\" }";
+    $first=0;
+}
+print "\n";
 '
+
 echo "  ]"
 echo "}"
