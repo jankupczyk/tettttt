@@ -1,51 +1,54 @@
 #!/bin/bash
 
-PHONENUMBER="$1"
-MSGTOSEND="$2"
 
-API_USER=""
-API_PASS=""
-SENDER=""
+validate_number() {
+    NUM="$1"
+
+    CLEANNUM=$(echo "$NUM" | tr -d ' -')
+
+
+    case "$CLEANNUM" in
+        +48*) ;;
+        *)
+            echo "ERROR: Phone number '$NUM' must start with +48"
+            return 1
+            ;;
+    esac
+
+
+    DIGITS=$(echo "$CLEANNUM" | cut -c4-)
+    if ! echo "$DIGITS" | grep -q '^[0-9]\{9\}$'; then
+        echo "ERROR: Phone number '$NUM' must have exactly 9 digits after +48"
+        return 1
+    fi
+
+    return 0
+}
+
+
+NUM="$1"
+MSG="$2"
+SRVCNME="testsendsmsz"
 
 
 if [ $# -lt 2 ]; then
-    echo "uSAGE: $0 <PHONENUMBER> <MSGTOSEND>"
+    echo "Usage: $0 <phone_number> <message>"
     exit 1
 fi
 
+validate_number "$NUM" || exit 2
 
-if ! [[ "$PHONENUMBER" =~ ^\+48[0-9]{9}$ ]]; then
-    echo "ERROR: Phone number '$PHONENUMBER' must be in format +48XXXXXXXXX"
-    exit 1
+
+if [ -z "$MSG" ]; then
+    echo "ERROR: Message text cannot be empty"
+    exit 3
 fi
 
 
-if [ -z "$MSGTOSEND" ]; then
-    echo "ERROR:: Message text cannot be empty"
-    exit 1
-fi
 
-if [ ${#MSGTOSEND} -gt 160 ]; then
-    echo "WARN:: Message longer than 160 characters may be split into multiple SMS!"
-fi
-
-
-RESPONSE=$(curl -s -w "%{http_code}" -o /tmp/sms_response.txt \
-  -X POST "https://api.orange.pl/sms/send" \
-  -u "$API_USER:$API_PASS" \
-  -H "Content-Type: application/json" \
-  -d '{
-        "to": "'"$PHONENUMBER"'",
-        "message": "'"$MSGTOSEND"'",
-        "from": "'"$SENDER"'"
-      }')
-
-
-if [ "$RESPONSE" -eq 200 ]; then
-    echo "SMS SEND TO $PHONENUMBER -REC -OK"
-    exit 0
+if [ $? -eq 0 ]; then
+    echo "SUCCESS: SMS sent to $NUM"
 else
-    echo "BŁĄD: API zwróciło kod $RESPONSE"
-    cat /tmp/sms_response.txt
+    echo "FAILURE: Could not send SMS via Tuxedo"
     exit 4
 fi
