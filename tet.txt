@@ -1,32 +1,21 @@
+import csv
 import re
 from datetime import datetime
-import chardet  # pip install chardet
+import chardet
 
 def detect_encoding(file_path):
+    """Wykrywa stronę kodową pliku."""
     with open(file_path, "rb") as f:
-        raw = f.read(10000)  # sprawdzamy pierwsze 10KB
+        raw = f.read(10000)
         result = chardet.detect(raw)
-        return result['encoding']
+        return result["encoding"]
 
-def validate_pli_line(line):
+def validate_pli_line(fields):
+    """Waliduje jedną linię PLI."""
     errors = []
-    
-    # Rozdziel pola po przecinku (uwaga: pola w cudzysłowie mogą zawierać przecinki)
-    fields = []
-    tmp = ""
-    in_quotes = False
-    for char in line:
-        if char == '"':
-            in_quotes = not in_quotes
-        elif char == ',' and not in_quotes:
-            fields.append(tmp)
-            tmp = ""
-        else:
-            tmp += char
-    fields.append(tmp)
 
     if len(fields) != 16:
-        errors.append(f"Niewłaściwa liczba pól: {len(fields)}")
+        errors.append(f"Niewłaściwa liczba pól: {len(fields)} (oczekiwano 16)")
         return errors
 
     # 1. Kod zlecenia
@@ -52,19 +41,19 @@ def validate_pli_line(line):
         errors.append(f"Pole 5 powinno być zerem: {fields[4]}")
 
     # 6. Numer rachunku zleceniodawcy NRB
-    if not re.fullmatch(r'\d{26}', fields[5].replace('"','')):
+    if not re.fullmatch(r'\d{26}', fields[5]):
         errors.append(f"Niepoprawny numer rachunku zleceniodawcy: {fields[5]}")
 
     # 7. Numer rachunku kontrahenta NRB
-    if not re.fullmatch(r'\d{26}', fields[6].replace('"','')):
+    if not re.fullmatch(r'\d{26}', fields[6]):
         errors.append(f"Niepoprawny numer rachunku kontrahenta: {fields[6]}")
 
-    # 8,9,12. Nazwa i adres zleceniodawcy, kontrahenta i tytuł
-    for idx in [7,8,11]:
-        content = fields[idx].replace('"','')
+    # 8, 9, 12 – nazwy/adresy/tytuły (maks. 4 linie po 35 znaków)
+    for idx in [7, 8, 11]:
+        content = fields[idx]
         lines = content.split('|')
-        if len(lines) != 4:
-            errors.append(f"Pola {idx+1} powinny mieć 4 linie oddzielone '|', mają {len(lines)}")
+        if len(lines) > 4:
+            errors.append(f"Pole {idx+1} ma więcej niż 4 linie")
         for line_content in lines:
             if len(line_content) > 35:
                 errors.append(f"Linia w polu {idx+1} za długa (>35 znaków): {line_content}")
@@ -88,16 +77,20 @@ def validate_pli_line(line):
 
     return errors
 
+def main(file_path):
+    encoding = detect_encoding(file_path)
+    print(f"📑 Strona kodowa pliku: {encoding}\n")
 
-# Przykład użycia
-file_path = "przyklad.pli"
-encoding = detect_encoding(file_path)
-print(f"Strona kodowa pliku: {encoding}\n")
+    with open(file_path, "r", encoding=encoding, errors="replace", newline="") as f:
+        reader = csv.reader(f, delimiter=",", quotechar='"')
+        for i, fields in enumerate(reader, 1):
+            errs = validate_pli_line(fields)
+            if errs:
+                print(f"\n❌ Błąd w linii {i}: {fields}")
+                for e in errs:
+                    print("   -", e)
+            else:
+                print(f"✅ Linia {i} poprawna")
 
-with open(file_path, "r", encoding=encoding, errors="replace") as f:
-    for i, line in enumerate(f, 1):
-        errs = validate_pli_line(line.strip())
-        if errs:
-            print(f"Błąd w linii {i}:")
-            for e in errs:
-                print(" -", e)
+if __name__ == "__main__":
+    main("przyklad.pli")
