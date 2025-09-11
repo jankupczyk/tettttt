@@ -1,10 +1,17 @@
 import re
 from datetime import datetime
+import chardet  # pip install chardet
+
+def detect_encoding(file_path):
+    with open(file_path, "rb") as f:
+        raw = f.read(10000)  # sprawdzamy pierwsze 10KB
+        result = chardet.detect(raw)
+        return result['encoding']
 
 def validate_pli_line(line):
     errors = []
     
-    # Rozdziel pola po przecinku (uwaga: pola 6,7,8,9,12 są w cudzysłowie i mogą zawierać przecinki)
+    # Rozdziel pola po przecinku (uwaga: pola w cudzysłowie mogą zawierać przecinki)
     fields = []
     tmp = ""
     in_quotes = False
@@ -18,7 +25,6 @@ def validate_pli_line(line):
             tmp += char
     fields.append(tmp)
 
-    # Powinno być dokładnie 16 pól
     if len(fields) != 16:
         errors.append(f"Niewłaściwa liczba pól: {len(fields)}")
         return errors
@@ -58,7 +64,7 @@ def validate_pli_line(line):
         content = fields[idx].replace('"','')
         lines = content.split('|')
         if len(lines) != 4:
-            errors.append(f"Pola {idx+1} powinny mieć 4 linie oddzielone '|', mają {len(lines)}: {content}")
+            errors.append(f"Pola {idx+1} powinny mieć 4 linie oddzielone '|', mają {len(lines)}")
         for line_content in lines:
             if len(line_content) > 35:
                 errors.append(f"Linia w polu {idx+1} za długa (>35 znaków): {line_content}")
@@ -83,8 +89,12 @@ def validate_pli_line(line):
     return errors
 
 
-# Przykład użycia:
-with open("przyklad.pli", "r", encoding="utf-8") as f:
+# Przykład użycia
+file_path = "przyklad.pli"
+encoding = detect_encoding(file_path)
+print(f"Strona kodowa pliku: {encoding}\n")
+
+with open(file_path, "r", encoding=encoding, errors="replace") as f:
     for i, line in enumerate(f, 1):
         errs = validate_pli_line(line.strip())
         if errs:
