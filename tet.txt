@@ -2,7 +2,6 @@ import csv
 import re
 from datetime import datetime
 import chardet
-import textwrap
 
 def detect_encoding(file_path):
     with open(file_path, "rb") as f:
@@ -10,67 +9,83 @@ def detect_encoding(file_path):
         result = chardet.detect(raw)
         return result["encoding"]
 
+def find_first_invalid_char(value, pattern):
+    """Zwraca indeks pierwszego znaku niepasującego do regexa."""
+    m = re.fullmatch(pattern, value)
+    if m:
+        return None
+    for i in range(len(value)):
+        if not re.fullmatch(pattern, value[:i+1]):
+            return i
+    return 0 if value else None
+
 def validate_pli_record(fields, recno):
     errors = []
 
     if len(fields) != 16:
-        errors.append(f"[rekord {recno}] niewłaściwa liczba pól: {len(fields)} (oczekiwano 16)")
+        errors.append(f"[rekord {recno}] ❌ niewłaściwa liczba pól: {len(fields)} (oczekiwano 16)")
         return errors
 
     # 1. Kod zlecenia
-    if not re.fullmatch(r'110|210|71', fields[0]):
-        errors.append(f"[rekord {recno}, pole 1] niepoprawny kod zlecenia: {fields[0]}")
+    if fields[0] not in {"110", "210", "71"}:
+        errors.append(f"[rekord {recno}, pole 1] ❌ Kod zlecenia '{fields[0]}' niepoprawny")
 
     # 2. Data wykonania
     try:
         datetime.strptime(fields[1], "%Y%m%d")
     except ValueError:
-        errors.append(f"[rekord {recno}, pole 2] niepoprawna data wykonania: {fields[1]}")
+        errors.append(f"[rekord {recno}, pole 2] ❌ Błędna data '{fields[1]}'")
 
     # 3. Kwota
-    if not re.fullmatch(r'\d{1,15}', fields[2]):
-        errors.append(f"[rekord {recno}, pole 3] niepoprawna kwota: {fields[2]}")
+    pos = find_first_invalid_char(fields[2], r"\d{1,15}")
+    if pos is not None:
+        errors.append(f"[rekord {recno}, pole 3] ❌ Kwota '{fields[2]}', błąd przy znaku {pos+1} ('{fields[2][pos]}')")
 
-    # 4. Numer rozliczeniowy banku zleceniodawcy
-    if not re.fullmatch(r'\d{8}', fields[3]):
-        errors.append(f"[rekord {recno}, pole 4] niepoprawny BSC zleceniodawcy: {fields[3]}")
+    # 4. BSC zleceniodawcy
+    pos = find_first_invalid_char(fields[3], r"\d{8}")
+    if pos is not None:
+        errors.append(f"[rekord {recno}, pole 4] ❌ BSC '{fields[3]}', błąd przy znaku {pos+1}")
 
     # 5. Pole zerowe
-    if fields[4] != '0':
-        errors.append(f"[rekord {recno}, pole 5] powinno być '0', a jest: {fields[4]}")
+    if fields[4] != "0":
+        errors.append(f"[rekord {recno}, pole 5] ❌ powinno być '0', a jest '{fields[4]}'")
 
-    # 6. Numer rachunku zleceniodawcy NRB
-    if not re.fullmatch(r'\d{26}', fields[5]):
-        errors.append(f"[rekord {recno}, pole 6] niepoprawny NRB zleceniodawcy: {fields[5]}")
+    # 6. NRB zleceniodawcy
+    pos = find_first_invalid_char(fields[5], r"\d{26}")
+    if pos is not None:
+        errors.append(f"[rekord {recno}, pole 6] ❌ NRB '{fields[5]}', błąd przy znaku {pos+1}")
 
-    # 7. Numer rachunku kontrahenta NRB
-    if not re.fullmatch(r'\d{26}', fields[6]):
-        errors.append(f"[rekord {recno}, pole 7] niepoprawny NRB kontrahenta: {fields[6]}")
+    # 7. NRB kontrahenta
+    pos = find_first_invalid_char(fields[6], r"\d{26}")
+    if pos is not None:
+        errors.append(f"[rekord {recno}, pole 7] ❌ NRB '{fields[6]}', błąd przy znaku {pos+1}")
 
-    # 8, 9, 12 – nazwy/adresy/tytuły (maks. 4 linie po 35 znaków)
+    # 8, 9, 12 – nazwy/adresy/tytuł
     for idx in [7, 8, 11]:
         content = fields[idx]
-        lines = content.split('|')
+        lines = content.split("|")
         if len(lines) > 4:
-            errors.append(f"[rekord {recno}, pole {idx+1}] za dużo linii (max 4): {lines}")
+            errors.append(f"[rekord {recno}, pole {idx+1}] ❌ za dużo linii ({len(lines)}), max 4")
         for lno, line_content in enumerate(lines, 1):
             if len(line_content) > 35:
                 errors.append(
-                    f"[rekord {recno}, pole {idx+1}, linia {lno}] za długa (>35 znaków): '{line_content}'"
+                    f"[rekord {recno}, pole {idx+1}, linia {lno}] ❌ za długa (>35): '{line_content}'"
                 )
 
     # 10. Pole zerowe
-    if fields[9] != '0':
-        errors.append(f"[rekord {recno}, pole 10] powinno być '0', a jest: {fields[9]}")
+    if fields[9] != "0":
+        errors.append(f"[rekord {recno}, pole 10] ❌ powinno być '0', a jest '{fields[9]}'")
 
-    # 11. Numer rozliczeniowy banku kontrahenta
-    if not re.fullmatch(r'\d{8}', fields[10]):
-        errors.append(f"[rekord {recno}, pole 11] niepoprawny BSC kontrahenta: {fields[10]}")
+    # 11. BSC kontrahenta
+    pos = find_first_invalid_char(fields[10], r"\d{8}")
+    if pos is not None:
+        errors.append(f"[rekord {recno}, pole 11] ❌ BSC '{fields[10]}', błąd przy znaku {pos+1}")
 
     # 15. Klasyfikacja polecenia
     valid_klasyfikacja = {"110": "51", "210": "01", "71": "71"}
-    if fields[14] != valid_klasyfikacja.get(fields[0], ""):
-        errors.append(f"[rekord {recno}, pole 15] niewłaściwa klasyfikacja {fields[14]} dla kodu {fields[0]}")
+    expected = valid_klasyfikacja.get(fields[0], "")
+    if fields[14] != expected:
+        errors.append(f"[rekord {recno}, pole 15] ❌ '{fields[14]}' zamiast '{expected}' dla kodu {fields[0]}")
 
     return errors
 
@@ -84,22 +99,19 @@ def main(file_path):
         for row in reader:
             all_fields.extend(row)
 
-    # czy liczba pól dzieli się na 16?
     if len(all_fields) % 16 != 0:
         print(f"❌ UWAGA: całkowita liczba pól = {len(all_fields)}, nie dzieli się przez 16!")
-        # pokaż podejrzany fragment ostatnich pól
-        tail = all_fields[-20:]
-        print("Ostatnie pola:", tail)
+        print("Ostatnie pola:", all_fields[-20:])
 
-    # Walidacja rekordów
     for recno, start in enumerate(range(0, len(all_fields), 16), 1):
         record = all_fields[start:start+16]
         errs = validate_pli_record(record, recno)
         if errs:
-            print("\n❌ Błędy:")
+            print("\n❌ Błędy w rekordzie", recno)
             for e in errs:
                 print("  -", e)
-            print("  ➡ Surowe pola rekordu:", record)
+            for i, field in enumerate(record, 1):
+                print(f"     pole {i}: {field}")
         else:
             print(f"✅ Rekord {recno} poprawny")
 
