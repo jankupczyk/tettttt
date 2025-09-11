@@ -1,1 +1,93 @@
-perl -e 'my @s=stat("plik.txt"); print join(" ", $s[7], sprintf("%o",$s[2]&07777), $s[4], $s[5], $s[3], scalar localtime($s[9])),"\n";'
+import re
+from datetime import datetime
+
+def validate_pli_line(line):
+    errors = []
+    
+    # Rozdziel pola po przecinku (uwaga: pola 6,7,8,9,12 są w cudzysłowie i mogą zawierać przecinki)
+    fields = []
+    tmp = ""
+    in_quotes = False
+    for char in line:
+        if char == '"':
+            in_quotes = not in_quotes
+        elif char == ',' and not in_quotes:
+            fields.append(tmp)
+            tmp = ""
+        else:
+            tmp += char
+    fields.append(tmp)
+
+    # Powinno być dokładnie 16 pól
+    if len(fields) != 16:
+        errors.append(f"Niewłaściwa liczba pól: {len(fields)}")
+        return errors
+
+    # 1. Kod zlecenia
+    if not re.fullmatch(r'110|210|71', fields[0]):
+        errors.append(f"Niepoprawny kod zlecenia: {fields[0]}")
+
+    # 2. Data wykonania
+    try:
+        datetime.strptime(fields[1], "%Y%m%d")
+    except ValueError:
+        errors.append(f"Niepoprawna data wykonania: {fields[1]}")
+
+    # 3. Kwota
+    if not re.fullmatch(r'\d{1,15}', fields[2]):
+        errors.append(f"Niepoprawna kwota: {fields[2]}")
+
+    # 4. Numer rozliczeniowy banku zleceniodawcy
+    if not re.fullmatch(r'\d{8}', fields[3]):
+        errors.append(f"Niepoprawny numer rozliczeniowy banku zleceniodawcy: {fields[3]}")
+
+    # 5. Pole zerowe
+    if fields[4] != '0':
+        errors.append(f"Pole 5 powinno być zerem: {fields[4]}")
+
+    # 6. Numer rachunku zleceniodawcy NRB
+    if not re.fullmatch(r'\d{26}', fields[5].replace('"','')):
+        errors.append(f"Niepoprawny numer rachunku zleceniodawcy: {fields[5]}")
+
+    # 7. Numer rachunku kontrahenta NRB
+    if not re.fullmatch(r'\d{26}', fields[6].replace('"','')):
+        errors.append(f"Niepoprawny numer rachunku kontrahenta: {fields[6]}")
+
+    # 8,9,12. Nazwa i adres zleceniodawcy, kontrahenta i tytuł
+    for idx in [7,8,11]:
+        content = fields[idx].replace('"','')
+        lines = content.split('|')
+        if len(lines) != 4:
+            errors.append(f"Pola {idx+1} powinny mieć 4 linie oddzielone '|', mają {len(lines)}: {content}")
+        for line_content in lines:
+            if len(line_content) > 35:
+                errors.append(f"Linia w polu {idx+1} za długa (>35 znaków): {line_content}")
+
+    # 10. Pole zerowe
+    if fields[9] != '0':
+        errors.append(f"Pole 10 powinno być zerem: {fields[9]}")
+
+    # 11. Numer rozliczeniowy banku kontrahenta
+    if not re.fullmatch(r'\d{8}', fields[10]):
+        errors.append(f"Niepoprawny numer rozliczeniowy banku kontrahenta: {fields[10]}")
+
+    # 15. Klasyfikacja polecenia
+    valid_klasyfikacja = {
+        "110": "51",
+        "210": "01",
+        "71": "71"
+    }
+    if fields[14] != valid_klasyfikacja.get(fields[0], ""):
+        errors.append(f"Niepoprawna klasyfikacja polecenia dla kodu {fields[0]}: {fields[14]}")
+
+    return errors
+
+
+# Przykład użycia:
+with open("przyklad.pli", "r", encoding="utf-8") as f:
+    for i, line in enumerate(f, 1):
+        errs = validate_pli_line(line.strip())
+        if errs:
+            print(f"Błąd w linii {i}:")
+            for e in errs:
+                print(" -", e)
