@@ -1,119 +1,24 @@
-import csv
-import re
-from datetime import datetime
-import chardet
+#!/usr/bin/env lua
+local redis = require "redis"
 
-def detect_encoding(file_path):
-    with open(file_path, "rb") as f:
-        raw = f.read(10000)
-        result = chardet.detect(raw)
-        return result["encoding"]
+local masters = {
+    { host = "10.0.0.1", port = 6379 },
+    { host = "10.0.0.2", port = 6379 },
+    { host = "10.0.0.3", port = 6379 }
+}
 
-def find_first_invalid_char(value, pattern):
-    """Zwraca indeks pierwszego znaku niepasującego do regexa."""
-    m = re.fullmatch(pattern, value)
-    if m:
-        return None
-    for i in range(len(value)):
-        if not re.fullmatch(pattern, value[:i+1]):
-            return i
-    return 0 if value else None
+local total_hits, total_misses = 0, 0
 
-def validate_pli_record(fields, recno):
-    errors = []
+for _, node in ipairs(masters) do
+    local client = redis.connect(node.host, node.port)
+    local info = client:info("stats")
+    total_hits   = total_hits   + (tonumber(info["keyspace_hits"])   or 0)
+    total_misses = total_misses + (tonumber(info["keyspace_misses"]) or 0)
+end
 
-    if len(fields) != 16:
-        errors.append(f"[rekord {recno}] ❌ niewłaściwa liczba pól: {len(fields)} (oczekiwano 16)")
-        return errors
-
-    # 1. Kod zlecenia
-    if fields[0] not in {"110", "210", "71"}:
-        errors.append(f"[rekord {recno}, pole 1] ❌ Kod zlecenia '{fields[0]}' niepoprawny")
-
-    # 2. Data wykonania
-    try:
-        datetime.strptime(fields[1], "%Y%m%d")
-    except ValueError:
-        errors.append(f"[rekord {recno}, pole 2] ❌ Błędna data '{fields[1]}'")
-
-    # 3. Kwota
-    pos = find_first_invalid_char(fields[2], r"\d{1,15}")
-    if pos is not None:
-        errors.append(f"[rekord {recno}, pole 3] ❌ Kwota '{fields[2]}', błąd przy znaku {pos+1} ('{fields[2][pos]}')")
-
-    # 4. BSC zleceniodawcy
-    pos = find_first_invalid_char(fields[3], r"\d{8}")
-    if pos is not None:
-        errors.append(f"[rekord {recno}, pole 4] ❌ BSC '{fields[3]}', błąd przy znaku {pos+1}")
-
-    # 5. Pole zerowe
-    if fields[4] != "0":
-        errors.append(f"[rekord {recno}, pole 5] ❌ powinno być '0', a jest '{fields[4]}'")
-
-    # 6. NRB zleceniodawcy
-    pos = find_first_invalid_char(fields[5], r"\d{26}")
-    if pos is not None:
-        errors.append(f"[rekord {recno}, pole 6] ❌ NRB '{fields[5]}', błąd przy znaku {pos+1}")
-
-    # 7. NRB kontrahenta
-    pos = find_first_invalid_char(fields[6], r"\d{26}")
-    if pos is not None:
-        errors.append(f"[rekord {recno}, pole 7] ❌ NRB '{fields[6]}', błąd przy znaku {pos+1}")
-
-    # 8, 9, 12 – nazwy/adresy/tytuł
-    for idx in [7, 8, 11]:
-        content = fields[idx]
-        lines = content.split("|")
-        if len(lines) > 4:
-            errors.append(f"[rekord {recno}, pole {idx+1}] ❌ za dużo linii ({len(lines)}), max 4")
-        for lno, line_content in enumerate(lines, 1):
-            if len(line_content) > 35:
-                errors.append(
-                    f"[rekord {recno}, pole {idx+1}, linia {lno}] ❌ za długa (>35): '{line_content}'"
-                )
-
-    # 10. Pole zerowe
-    if fields[9] != "0":
-        errors.append(f"[rekord {recno}, pole 10] ❌ powinno być '0', a jest '{fields[9]}'")
-
-    # 11. BSC kontrahenta
-    pos = find_first_invalid_char(fields[10], r"\d{8}")
-    if pos is not None:
-        errors.append(f"[rekord {recno}, pole 11] ❌ BSC '{fields[10]}', błąd przy znaku {pos+1}")
-
-    # 15. Klasyfikacja polecenia
-    valid_klasyfikacja = {"110": "51", "210": "01", "71": "71"}
-    expected = valid_klasyfikacja.get(fields[0], "")
-    if fields[14] != expected:
-        errors.append(f"[rekord {recno}, pole 15] ❌ '{fields[14]}' zamiast '{expected}' dla kodu {fields[0]}")
-
-    return errors
-
-def main(file_path):
-    encoding = detect_encoding(file_path)
-    print(f"📑 Strona kodowa pliku: {encoding}\n")
-
-    with open(file_path, "r", encoding=encoding, errors="replace", newline="") as f:
-        reader = csv.reader(f, delimiter=",", quotechar='"')
-        all_fields = []
-        for row in reader:
-            all_fields.extend(row)
-
-    if len(all_fields) % 16 != 0:
-        print(f"❌ UWAGA: całkowita liczba pól = {len(all_fields)}, nie dzieli się przez 16!")
-        print("Ostatnie pola:", all_fields[-20:])
-
-    for recno, start in enumerate(range(0, len(all_fields), 16), 1):
-        record = all_fields[start:start+16]
-        errs = validate_pli_record(record, recno)
-        if errs:
-            print("\n❌ Błędy w rekordzie", recno)
-            for e in errs:
-                print("  -", e)
-            for i, field in enumerate(record, 1):
-                print(f"     pole {i}: {field}")
-        else:
-            print(f"✅ Rekord {recno} poprawny")
-
-if __name__ == "__main__":
-    main("przyklad.pli")
+local total = total_hits + total_misses
+if total == 0 then
+    print(0)
+else
+    print(string.format("%.2f", (total_hits / total) * 100))
+end
