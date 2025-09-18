@@ -1,24 +1,10 @@
-#!/usr/bin/env lua
-local redis = require "redis"
+local info = redis.call("INFO", "stats")
+local hits = tonumber(info:match("keyspace_hits:(%d+)")) or 0
+local misses = tonumber(info:match("keyspace_misses:(%d+)")) or 0
+local total = hits + misses
 
-local masters = {
-    { host = "10.0.0.1", port = 6379 },
-    { host = "10.0.0.2", port = 6379 },
-    { host = "10.0.0.3", port = 6379 }
-}
-
-local total_hits, total_misses = 0, 0
-
-for _, node in ipairs(masters) do
-    local client = redis.connect(node.host, node.port)
-    local info = client:info("stats")
-    total_hits   = total_hits   + (tonumber(info["keyspace_hits"])   or 0)
-    total_misses = total_misses + (tonumber(info["keyspace_misses"]) or 0)
-end
-
-local total = total_hits + total_misses
 if total == 0 then
-    print(0)
+    return 0
 else
-    print(string.format("%.2f", (total_hits / total) * 100))
+    return string.format("%.2f", (hits / total) * 100)
 end
