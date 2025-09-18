@@ -1,10 +1,61 @@
-local info = redis.call("INFO", "stats")
-local hits = tonumber(info:match("keyspace_hits:(%d+)")) or 0
-local misses = tonumber(info:match("keyspace_misses:(%d+)")) or 0
-local total = hits + misses
+#!/usr/bin/env python3
+import os
+import subprocess
+import redis
 
-if total == 0 then
-    return 0
-else
-    return string.format("%.2f", (hits / total) * 100)
-end
+seed_host = os.getenv("REDIS_HOST", "127.0.0.1")
+seed_port = int(os.getenv("REDIS_PORT", "6379"))
+redis_password = os.getenv("REDISCLI_AUTH")
+use_tls = os.getenv("REDIS_TLS", "no").lower() == "yes"
+
+def get_masters():
+    cmd = ["redis-cli", "-c", "-h", seed_host, "-p", str(seed_port)]
+    if use_tls:
+        cmd.append("--tls")
+    if redis_password:
+        cmd += ["-a", redis_password]
+    cmd.append("cluster nodes")
+    try:
+        output = subprocess.check_output(cmd, text=True)
+    except subprocess.CalledProcessError:
+        return []
+
+    masters = []
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        addr, flags = parts[1], parts[2]
+        if "master" in flags and "fail" not in flags:
+            host, port = addr.split(":")[0], int(addr.split(":")[1])
+            masters.append((host, port))
+    return masters
+
+def get_node_stats(host, port):
+    try:
+        kwargs = {"host": host, "port": port, "socket_timeout": 2}
+        if redis_password:
+            kwargs["password"] = redis_password
+        if use_tls:
+            kwargs["ssl"] = True
+        r = redis.Redis(**kwargs)
+        info = r.info("stats")
+        hits = info.get("keyspace_hits", 0)
+        misses = info.get("keyspace_misses", 0)
+        return hits, misses
+    except:
+        return 0, 0
+
+total_hits, total_misses = 0, 0
+masters = get_masters()
+
+for host, port in masters:
+    hits, misses = get_node_stats(host, port)
+    total_hits += hits
+    total_misses += misses
+
+total = total_hits + total_misses
+if total == 0:
+    print("0")
+else:
+    print(f"{(total_hits / total) * 100:.2f}")
