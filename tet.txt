@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-import os
-import subprocess
-import redis
+import os, subprocess, redis
 
 seed_host = os.getenv("REDIS_HOST", "127.0.0.1")
 seed_port = int(os.getenv("REDIS_PORT", "6379"))
@@ -17,9 +15,8 @@ def get_masters():
     cmd.append("cluster nodes")
     try:
         output = subprocess.check_output(cmd, text=True)
-    except subprocess.CalledProcessError:
+    except:
         return []
-
     masters = []
     for line in output.splitlines():
         parts = line.split()
@@ -43,11 +40,14 @@ def get_node_stats(host, port):
         hits = info.get("keyspace_hits", 0)
         misses = info.get("keyspace_misses", 0)
         return hits, misses
-    except:
-        return 0, 0
+    except redis.exceptions.ConnectionError:
+        return 0,0
+    except Exception:
+        return 0,0
 
-total_hits, total_misses = 0, 0
+# Pobieramy wszystkich masterów z seed node
 masters = get_masters()
+total_hits, total_misses = 0,0
 
 for host, port in masters:
     hits, misses = get_node_stats(host, port)
@@ -58,4 +58,4 @@ total = total_hits + total_misses
 if total == 0:
     print("0")
 else:
-    print(f"{(total_hits / total) * 100:.2f}")
+    print(f"{(total_hits/total)*100:.2f}")
