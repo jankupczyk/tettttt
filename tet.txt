@@ -1,4 +1,6 @@
-def discover_masters():
+import subprocess
+
+def get_masters():
     cmd = ["redis-cli", "-c", "-h", seed_host, "-p", str(seed_port)]
     if use_tls:
         cmd.append("--tls")
@@ -8,15 +10,21 @@ def discover_masters():
 
     try:
         output = subprocess.check_output(cmd, text=True)
-    except Exception:
+    except Exception as e:
+        print(f"Error running redis-cli: {e}")
         return []
 
     masters = []
     for line in output.splitlines():
-        if "master" in line and "fail" not in line:
-            m = re.search(r'([0-9A-Za-z._-]+):(\d+)@', line)
-            if m:
-                host = m.group(1)
-                port = int(m.group(2))
-                masters.append((host, port))
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+
+        addr = parts[1]
+        flags = " ".join(parts[2:])
+
+        if "master" in flags and "fail" not in flags:
+            host = addr.split(":")[0]
+            port = int(addr.split(":")[1].split("@")[0])
+            masters.append((host, port))
     return masters
