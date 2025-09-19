@@ -1,61 +1,129 @@
 #!/usr/bin/env python3
-import os, subprocess, redis
+import os, subprocess, sys
+DEBUG = os.getenv("DEBUG", "1") == "1"
 
 seed_host = os.getenv("REDIS_HOST", "127.0.0.1")
 seed_port = int(os.getenv("REDIS_PORT", "6379"))
 redis_password = os.getenv("REDISCLI_AUTH")
 use_tls = os.getenv("REDIS_TLS", "no").lower() == "yes"
 
-def get_masters():
+# helper to run shell command
+def run_cmd(cmd):
+    try:
+        out = subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT)
+        return out
+    except subprocess.CalledProcessError as e:
+        if DEBUG:
+            print("CMDERR:", " ".join(cmd), "=>", e.output, file=sys.stderr)
+        raise
+
+def discover_masters():
     cmd = ["redis-cli", "-c", "-h", seed_host, "-p", str(seed_port)]
     if use_tls:
         cmd.append("--tls")
     if redis_password:
         cmd += ["-a", redis_password]
     cmd.append("cluster nodes")
-    try:
-        output = subprocess.check_output(cmd, text=True)
-    except:
-        return []
+    out = run_cmd(cmd)
     masters = []
-    for line in output.splitlines():
+    for line in out.splitlines():
         parts = line.split()
-        if len(parts) < 3:
+        if len(parts) < 2:
             continue
-        addr, flags = parts[1], parts[2]
+        addr = parts[1]
+        flags = parts[2] if len(parts) > 2 else ""
+        # choose lines that contain 'master' and do not contain 'fail'
         if "master" in flags and "fail" not in flags:
-            host, port = addr.split(":")[0], int(addr.split(":")[1])
+            host = addr.split(":")[0]
+            port_str = addr.split(":")[1].split("@")[0]  # <-- important: ignore @bus_port
+            try:
+                port = int(port_str)
+            except:
+                continue
             masters.append((host, port))
     return masters
 
-def get_node_stats(host, port):
-    try:
-        kwargs = {"host": host, "port": port, "socket_timeout": 2}
-        if redis_password:
-            kwargs["password"] = redis_password
-        if use_tls:
-            kwargs["ssl"] = True
-        r = redis.Redis(**kwargs)
-        info = r.info("stats")
-        hits = info.get("keyspace_hits", 0)
-        misses = info.get("keyspace_misses", 0)
-        return hits, misses
-    except redis.exceptions.ConnectionError:
-        return 0,0
-    except Exception:
-        return 0,0
+# try redis-py first, then fallback to redis-cli
+def get_stats_via_redispy(host, port):
+    import redis
+    kwargs = {"host": host, "port": port, "socket_timeout": 3}
+    if redis_password:
+        kwargs["password"] = redis_password
+    if use_tls:
+        # jeśli masz self-signed, możesz odkomentować ssl_cert_reqs=None (mniej bezpieczne)
+        kwargs["ssl"] = True
+        # kwargs["ssl_cert_reqs"] = None
+    r = redis.Redis(**kwargs)
+    info = r.info("stats")
+    hits = info.get("keyspace_hits", 0)
+    misses = info.get("keyspace_misses", 0)
+    return int(hits), int(misses)
 
-# Pobieramy wszystkich masterów z seed node
-masters = get_masters()
-total_hits, total_misses = 0,0
+def get_stats_via_cli(host, port):
+    cmd = ["redis-cli", "-h", host, "-p", str(port)]
+    if use_tls:
+        cmd.append("--tls")
+    if redis_password:
+        cmd += ["-a", redis_password]
+    cmd += ["info", "stats"]
+    out = run_cmd(cmd)
+    hits = 0
+    misses = 0
+    for line in out.splitlines():
+        if line.startswith("keyspace_hits:"):
+            try:
+                hits = int(line.split(":",1)[1].strip())
+            except: hits = 0
+        if line.startswith("keyspace_misses:"):
+            try:
+                misses = int(line.split(":",1)[1].strip())
+            except: misses = 0
+    return hits, misses
 
-for host, port in masters:
-    hits, misses = get_node_stats(host, port)
-    total_hits += hits
-    total_misses += misses
+def main():
+    masters = discover_masters()
+    if DEBUG:
+        print("Discovered masters:", masters, file=sys.stderr)
+    total_hits = 0
+    total_misses = 0
 
-total = total_hits + total_misses
-if total == 0:
-    print("0")
-else:
-    print(f"{(total_hits/total)*100:.2f}")
+    if not masters:
+        if DEBUG:
+            print("No masters discovered - aborting", file=sys.stderr)
+        print("0")
+        return
+
+    for host, port in masters:
+        h = m = 0
+        if DEBUG:
+            print(f"Checking {host}:{port}", file=sys.stderr)
+        try:
+            h, m = get_stats_via_redispy(host, port)
+            if DEBUG:
+                print(f"redis-py -> {host}:{port} hits={h} misses={m}", file=sys.stderr)
+        except Exception as e:
+            if DEBUG:
+                print(f"redis-py failed for {host}:{port}: {e}", file=sys.stderr)
+            # fallback to CLI
+            try:
+                h, m = get_stats_via_cli(host, port)
+                if DEBUG:
+                    print(f"redis-cli fallback -> {host}:{port} hits={h} misses={m}", file=sys.stderr)
+            except Exception as e2:
+                if DEBUG:
+                    print(f"cli fallback failed for {host}:{port}: {e2}", file=sys.stderr)
+                h = m = 0
+        total_hits += h
+        total_misses += m
+
+    if DEBUG:
+        print(f"Totals -> hits={total_hits} misses={total_misses}", file=sys.stderr)
+
+    total = total_hits + total_misses
+    if total == 0:
+        print("0")
+    else:
+        print(f"{(total_hits/total)*100:.2f}")
+
+if __name__ == "__main__":
+    main()
