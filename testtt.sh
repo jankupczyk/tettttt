@@ -1,17 +1,45 @@
--- Wiek XID w bazach i procent do autovacuum
-SELECT 
-    datname,
-    age(datfrozenxid) AS oldest_xid_age,
-    round((age(datfrozenxid)::numeric / 200000000) * 100, 2) AS percent_of_max_age
-FROM pg_database
-ORDER BY percent_of_max_age DESC;
+#!/usr/bin/perl
+use strict;
+use warnings;
+use JSON;
+use IPC::Open2;
 
--- Wiek XID w tabelach (uwzględniając TOAST) i procent
-SELECT 
-    c.oid::regclass AS table_name,
-    greatest(age(c.relfrozenxid), age(t.relfrozenxid)) AS oldest_xid_age,
-    round((greatest(age(c.relfrozenxid), age(t.relfrozenxid))::numeric / 200000000) * 100, 2) AS percent_of_max_age
-FROM pg_class c
-LEFT JOIN pg_class t ON c.reltoastrelid = t.oid
-WHERE c.relkind IN ('r','m')
-ORDER BY percent_of_max_age DESC;
+my $tmadmin = '/path/to/tmadmin';
+my $debug   = 0;
+
+my $pid = open2(my $out, my $in, "$tmadmin -r 2>/dev/null")
+    or die "Nie mogę uruchomić tmadmin: $!";
+
+print $in "pq\n";
+close $in;
+
+my %queues;
+while (my $line = <$out>) {
+    chomp $line;
+    $line =~ s/^\s+|\s+$//g;
+    next if $line eq '' or $line =~ /^Prog|^-{3,}/i;
+
+    my @cols = split(/\s+/, $line);
+    next unless scalar @cols >= 5;
+
+    my ($prog, $queued) = ($cols[0], $cols[4]);
+    $queued = 0 if ($queued !~ /^\d+$/);
+
+    $queues{$prog} += $queued;
+    print "[DEBUG] $prog -> $queued\n" if $debug;
+}
+close $out;
+
+my @data;
+foreach my $prog (sort keys %queues) {
+    push @data, {
+        '{#PROGNAME}' => $prog,
+        '{#QUEUED}'   => $queues{$prog},
+    };
+}
+
+my %json_out = ( data => \@data );
+
+print to_json(\%json_out, { utf8 => 1, pretty => 0 });
+
+exit 0;
