@@ -3,11 +3,11 @@ use strict;
 use warnings;
 use JSON;
 use IPC::Open2;
-
-
+use Tie::IxHash;
 
 my $tmadmin = '/path/to/tmadmin';
 my $debug   = 0;
+
 
 my $pid = open2(my $out, my $in, "$tmadmin -r 2>/dev/null")
     or die "Nie mogę uruchomić tmadmin: $!";
@@ -32,17 +32,20 @@ while (my $line = <$out>) {
 }
 close $out;
 
+
 my @data;
 foreach my $prog (sort keys %queues) {
-    push @data, {
+    tie my %ordered, 'Tie::IxHash';
+    %ordered = (
         '{#PROGNAME}' => $prog,
-        '{#QUEUED}'   => $queues{$prog},
-    };
+        'QUEUED'      => $queues{$prog},
+    );
+    push @data, \%ordered;
 }
 
-my $json = JSON->new->utf8->pretty(1)->canonical(1);
-my $output = $json->encode({ data => \@data });
+my %json_out = ( data => \@data );
 
-print $output;
+
+print to_json(\%json_out, { utf8 => 1, pretty => 1 });
 
 exit 0;
