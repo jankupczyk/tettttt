@@ -1,7 +1,9 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
+use JSON;
 use IPC::Open2;
+
 
 
 my $tmadmin = '/path/to/tmadmin';
@@ -28,19 +30,19 @@ while (my $line = <$out>) {
     $queues{$prog} += $queued;
     print "[DEBUG] $prog -> $queued\n" if $debug;
 }
-close($out);
+close $out;
 
-my $json = '{"data":[';
-my @entries;
-
+my @data;
 foreach my $prog (sort keys %queues) {
-    my $p = $prog; $p =~ s/"/\\"/g;
-    my $q = $queues{$prog};
-    push @entries, qq|{"{#PROGNAME}":"$p","{#QUEUED}":"$q"}|;
+    push @data, {
+        '{#PROGNAME}' => $prog,
+        '{#QUEUED}'   => $queues{$prog},
+    };
 }
 
-$json .= join(',', @entries);
-$json .= ']}';
+my $json = JSON->new->utf8->pretty(1)->canonical(1);
+my $output = $json->encode({ data => \@data });
 
-print $json, "\n";
+print $output;
+
 exit 0;
