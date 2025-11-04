@@ -46,3 +46,13 @@ if (-f $env_file) {
 $.data[?(@["{#PROGNAME}"]=="{#PROGNAME}")].QUEUED.first()
 
 $.data[?(@["{#PROGNAME}"]=="{#PROGNAME}")].QUEUED.first() || 0
+
+
+var obj = JSON.parse(value);
+var prog = "{#PROGNAME}";
+for (var i=0; i<obj.data.length; i++) {
+  if (obj.data[i]["{#PROGNAME}"] === prog) {
+    return obj.data[i].QUEUED;
+  }
+}
+return null;
