@@ -41,3 +41,6 @@ if (-f $env_file) {
 } else {
     die "Brak pliku środowiska: $env_file\n";
 }
+
+
+$.data[?(@["{#PROGNAME}"]=="{#PROGNAME}")].QUEUED.first()
