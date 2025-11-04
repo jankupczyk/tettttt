@@ -56,3 +56,18 @@ for (var i=0; i<obj.data.length; i++) {
   }
 }
 return null;
+
+
+
+
+var obj = JSON.parse(value);
+var prog = "{#PROGNAME}";
+var found = [];
+for (var i = 0; i < obj.data.length; i++) {
+    found.push(obj.data[i]["{#PROGNAME}"]);
+    if (obj.data[i]["{#PROGNAME}"] === prog) {
+        return obj.data[i].QUEUED;
+    }
+}
+return "Szukano " + prog + ", znaleziono: " + found.join(",");
+
