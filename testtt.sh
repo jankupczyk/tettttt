@@ -78,13 +78,14 @@ return "Szukano " + prog + ", znaleziono: " + found.join(",");
 
 
 var obj = JSON.parse(value);
-var prog = "{#PROGNAME}";
-var output = [];
+var prog = "{#PROGNAME}".trim();
+
 for (var i = 0; i < obj.data.length; i++) {
-    for (var key in obj.data[i]) {
-        output.push(JSON.stringify(key) + " = " + JSON.stringify(obj.data[i][key]));
+    if (String(obj.data[i]["{#PROGNAME}"]).trim() === prog) {
+        return obj.data[i].QUEUED;
     }
 }
-return output.join("\n");
+return 0;
+
 
 
