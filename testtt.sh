@@ -44,3 +44,5 @@ if (-f $env_file) {
 
 
 $.data[?(@["{#PROGNAME}"]=="{#PROGNAME}")].QUEUED.first()
+
+$.data[?(@["{#PROGNAME}"]=="{#PROGNAME}")].QUEUED.first() || 0
