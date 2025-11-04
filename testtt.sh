@@ -71,3 +71,20 @@ for (var i = 0; i < obj.data.length; i++) {
 }
 return "Szukano " + prog + ", znaleziono: " + found.join(",");
 
+
+
+
+
+
+
+var obj = JSON.parse(value);
+var prog = "{#PROGNAME}";
+var output = [];
+for (var i = 0; i < obj.data.length; i++) {
+    for (var key in obj.data[i]) {
+        output.push(JSON.stringify(key) + " = " + JSON.stringify(obj.data[i][key]));
+    }
+}
+return output.join("\n");
+
+
