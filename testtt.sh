@@ -1,13 +1,14 @@
-$fullname = ""
+$targetFullName = "Jan Kowalski"
 
-net user /domain | ForEach-Object {
-    $u = $_.Trim()
-    if ($u -and $u -notmatch "User.*accounts" -and $u -notmatch "---") {
-        $details = net user "$u" /domain 2>$null
-        if ($details -match "Pełna nazwa\s*:\s*(.*)") {
+$logins = net user /domain | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -notmatch "User.*accounts|---" }
+
+foreach ($login in $logins) {
+    $details = net user $login /domain 2>$null
+    foreach ($line in $details) {
+        if ($line -match "^Pełna nazwa\s*:\s*(.*)$") {
             $full = $matches[1].Trim()
-            if ($full -eq $fullname) {
-                Write-Host "$fullname -> $u"
+            if ($full -eq $targetFullName) {
+                Write-Host "$login : $targetFullName"
             }
         }
     }
