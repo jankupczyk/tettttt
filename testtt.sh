@@ -1,1 +1,14 @@
-lsuser -c ALL | sed '1d' | awk -F: '$1!="root"{g=""; for(i=1;i<=NF;i++) if($i~/^gecos=/){sub(/^gecos=/,"",$i); g=$i} print $1 " : " g}'
+$fullname = ""
+
+net user /domain | ForEach-Object {
+    $u = $_.Trim()
+    if ($u -and $u -notmatch "User.*accounts" -and $u -notmatch "---") {
+        $details = net user "$u" /domain 2>$null
+        if ($details -match "Pełna nazwa\s*:\s*(.*)") {
+            $full = $matches[1].Trim()
+            if ($full -eq $fullname) {
+                Write-Host "$fullname -> $u"
+            }
+        }
+    }
+}
