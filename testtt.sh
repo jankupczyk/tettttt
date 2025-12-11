@@ -1,91 +1,66 @@
 #!/usr/bin/perl
-
 use strict;
 use warnings;
 use Getopt::Long;
 use POSIX qw(mktime);
 
-my ($directory, $period, $since, $until, $listfile, $output);
+my ($directory, $listfile, $output, $period, $since, $until);
 GetOptions(
     "dir=s"    => \$directory,
+    "list=s"   => \$listfile,
+    "out=s"    => \$output,
     "period=i" => \$period,
     "since=s"  => \$since,
     "until=s"  => \$until,
-    "list=s"   => \$listfile,
-    "out=s"    => \$output,
 );
 
-unless ($output) {
-    die "Brak parametru --out <plik_wyjściowy>\n";
-}
-
+die "Użycie:\n  --dir <katalog> [--list plik.txt] --out wynik.txt [--period min | --since ... [--until ...]]\n"
+    unless $directory && $output;
 my @zip_list;
 
 if ($listfile) {
-    open(my $LF, "<", $listfile) or die "Nie mogę otworzyć listy ZIP-ów: $listfile: $!\n";
+    open my $LF, "<", $listfile or die "Nie mogę otworzyć $listfile: $!";
     while (<$LF>) {
         chomp;
-        next unless /\S/;
-        my $zip = $_;
-        if (-f $zip) {
-            push @zip_list, $zip;
-        } else {
-            warn "Plik nie istnieje albo nie jest plikiem: $zip — pomijam\n";
-        }
+        next unless $_;
+        my $zip_path = -f $_ ? $_ : "$directory/$_";
+        push @zip_list, $zip_path if -f $zip_path;
     }
-    close($LF);
-}
-else {
-    unless ($directory && ($period || $since)) {
-        die "Jeśli nie podajesz --list, musisz podać --dir i (--period lub --since)\n";
-    }
-
+    close $LF;
+} else {
     my $time_from;
     my $time_to = time();
 
     if ($period) {
         $time_from = time() - ($period * 60);
-    } else {
+    } elsif ($since) {
         $since =~ s/[-: ]/ /g;
         my @t = split /\s+/, $since;
         $time_from = mktime(0, $t[4], $t[3], $t[2], $t[1]-1, $t[0]-1900);
+    } else {
+        $time_from = 0;
     }
 
     if ($until) {
         $until =~ s/[-: ]/ /g;
-        my @t2 = split /\s+/, $until;
-        $time_to = mktime(0, $t2[4], $t2[3], $t2[2], $t2[1]-1, $t2[0]-1900);
+        my @u = split /\s+/, $until;
+        $time_to = mktime(0, $u[4], $u[3], $u[2], $u[1]-1, $u[0]-1900);
     }
-
-    opendir(my $DIR, $directory) or die "Nie mogę otworzyć katalogu: $directory: $!\n";
-    while (my $f = readdir($DIR)) {
-        next unless $f =~ /\.zip$/i;
+    opendir my $D, $directory or die "Nie mogę otworzyć katalogu $directory: $!";
+    foreach my $f (grep { /\.zip$/i } readdir($D)) {
         my $full = "$directory/$f";
-        next unless -f $full;
         my $mtime = (stat($full))[9];
         next if $mtime < $time_from || $mtime > $time_to;
         push @zip_list, $full;
     }
-    closedir($DIR);
+    closedir $D;
 }
 
-if (!@zip_list) {
-    die "Nie znaleziono ZIP-ów do przetworzenia.\n";
-}
-
-open(my $OUT, ">", $output) or die "Nie mogę otworzyć pliku wyjściowego $output: $!\n";
-
+open my $OUT, ">", $output or die "Nie mogę otworzyć $output: $!";
 foreach my $zip (@zip_list) {
-    print $OUT "=== ZIP: $zip ===\n";
-    my @lines = `jar tf "$zip" 2>/dev/null`;
-    if (@lines) {
-        print $OUT @lines;
-    } else {
-        print $OUT "(Brak dostępu lub ZIP pusty / nie-zip)\n";
-    }
-    print $OUT "\n";
+    my @lines = map { (split)[3] } grep { $_ !~ /^(Length|=|$)/ } `unzip -l "$zip"`;
+    print $OUT "$_\n" for @lines;
 }
-
 close($OUT);
 
-print "Zrobione. Wynik w: $output\n";
+print "Raport gotowy: $output\n";
