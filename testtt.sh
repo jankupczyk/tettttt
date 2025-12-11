@@ -73,3 +73,25 @@ foreach my $zip (@zip_list) {
 close($OUT);
 
 print "Raport gotowy: $output\n";
+
+
+
+
+
+
+
+
+
+open my $OUT, ">", $output or die "Nie mogę otworzyć $output: $!";
+foreach my $zip (@zip_list) {
+
+    foreach my $line (`unzip -l "$zip" 2>/dev/null`) {
+        chomp $line;
+
+        my @cols = split ' ', $line;
+        next unless @cols >= 4;
+
+        print $OUT "$cols[-1]\n";
+    }
+}
+close($OUT);
