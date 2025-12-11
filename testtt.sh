@@ -4,6 +4,7 @@ use warnings;
 use Getopt::Long;
 use POSIX qw(mktime);
 
+# Parametry
 my ($directory, $listfile, $output, $period, $since, $until);
 GetOptions(
     "dir=s"    => \$directory,
@@ -16,6 +17,8 @@ GetOptions(
 
 die "Użycie:\n  --dir <katalog> [--list plik.txt] --out wynik.txt [--period min | --since ... [--until ...]]\n"
     unless $directory && $output;
+
+
 my @zip_list;
 
 if ($listfile) {
@@ -46,6 +49,7 @@ if ($listfile) {
         my @u = split /\s+/, $until;
         $time_to = mktime(0, $u[4], $u[3], $u[2], $u[1]-1, $u[0]-1900);
     }
+
     opendir my $D, $directory or die "Nie mogę otworzyć katalogu $directory: $!";
     foreach my $f (grep { /\.zip$/i } readdir($D)) {
         my $full = "$directory/$f";
@@ -58,8 +62,13 @@ if ($listfile) {
 
 open my $OUT, ">", $output or die "Nie mogę otworzyć $output: $!";
 foreach my $zip (@zip_list) {
-    my @lines = map { (split)[3] } grep { $_ !~ /^(Length|=|$)/ } `unzip -l "$zip"`;
-    print $OUT "$_\n" for @lines;
+    foreach my $line (`unzip -l "$zip" 2>/dev/null`) {
+        chomp $line;
+        next if $line =~ /^(Length|=|$)/;
+        my @cols = split ' ', $line;
+        next unless defined $cols[3];
+        print $OUT "$cols[3]\n";
+    }
 }
 close($OUT);
 
