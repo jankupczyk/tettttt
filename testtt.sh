@@ -1,9 +1,7 @@
-    if echo "$line" | grep -q "ACCEPTED"; then
-        echo "<span style=\"color:green;\">$line</span>"
-    elif echo "$line" | grep -q "PENDING"; then
-        echo "<span style=\"color:orange;\">$line</span>"
-    elif echo "$line" | grep -q "REJECTED"; then
-        echo "<span style=\"color:red;\">$line</span>"
-    else
-        echo "$line"
-    fi
+# Obliczamy datę początkową (teraz - 72h)
+START_DATE=$(perl -e 'use POSIX qw(strftime); print strftime("%Y-%m-%d %H:%M:%S", localtime(time()-72*3600))')
+
+# Obecny czas = data końcowa
+END_DATE=$(date "+%Y-%m-%d %H:%M:%S")
+
+echo "Report for transactions from $START_DATE to $END_DATE"
