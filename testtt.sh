@@ -1,23 +1,29 @@
-#!/bin/ksh
-
-INPUT="report.txt"
-HTML="/tmp/transaction_report.html"
-MAIL_TO="odbiorca@firma.pl"
-SUBJECT="Transaction Acknowledgment Report"
-
-echo "Preparing HTML report..."
-
 {
 echo "<html>"
 echo "<body style=\"font-family: monospace;\">"
+
+echo "<p>Hello team,</p>"
+echo "<p>Here are the acknowledgments for transactions executed within the last 6 hours.</p>"
+echo "<p>Status colors: <span style=\"color:green\">ACCEPTED</span>, <span style=\"color:yellow\">PENDING</span>, <span style=\"color:red\">REJECTED</span></p>"
+
 echo "<pre>"
 
 while IFS= read -r line; do
-    if echo "$line" | grep -q "PENDING"; then
-        echo "<span style=\"color:red;\">$line</span>"
-    else
-        echo "$line"
-    fi
+    STATUS=$(echo "$line" | awk -F"|" '{print $NF}')
+    case "$STATUS" in
+        "ACCEPTED")
+            echo "<span style=\"color:green;\">$line</span>"
+            ;;
+        "PENDING")
+            echo "<span style=\"color:orange;\">$line</span>"
+            ;;
+        "REJECTED")
+            echo "<span style=\"color:red;\">$line</span>"
+            ;;
+        *)
+            echo "$line"
+            ;;
+    esac
 done < "$INPUT"
 
 echo "</pre>"
@@ -27,7 +33,7 @@ echo "</html>"
 
 echo "Sending email via sendmail..."
 
- /usr/sbin/sendmail -t <<EOF
+/usr/sbin/sendmail -t <<EOF
 To: $MAIL_TO
 Subject: $SUBJECT
 MIME-Version: 1.0
