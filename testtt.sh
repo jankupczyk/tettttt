@@ -1,7 +1,16 @@
-# Obliczamy datę początkową (teraz - 72h)
-START_DATE=$(perl -e 'use POSIX qw(strftime); print strftime("%Y-%m-%d %H:%M:%S", localtime(time()-72*3600))')
+@SpringBootApplication
+@RestController
+public class HeaderTestApplication {
 
-# Obecny czas = data końcowa
-END_DATE=$(date "+%Y-%m-%d %H:%M:%S")
+    public static void main(String[] args) {
+        SpringApplication.run(HeaderTestApplication.class, args);
+    }
 
-echo "Report for transactions from $START_DATE to $END_DATE"
+    @GetMapping("/headers")
+    public Map<String, String> headers(HttpServletRequest request) {
+        Map<String, String> map = new HashMap<>();
+        Collections.list(request.getHeaderNames())
+                .forEach(h -> map.put(h, request.getHeader(h)));
+        return map;
+    }
+}
