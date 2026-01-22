@@ -1,35 +1,41 @@
-<VirtualHost *:443>
-    ServerName localhost
-    DocumentRoot "D:/xampp/htdocs/DOCROOT/public"
+setenv.sh
 
-    SSLEngine on
-    SSLCertificateFile "D:/xampp/apache/conf/ssl.crt/server.crt"
-    SSLCertificateKeyFile "D:/xampp/apache/conf/ssl.key/server_nopass.key"
-    SSLCertificateChainFile "D:/xampp/apache/conf/ssl.crt/chain.crt"
+#!/bin/sh
 
-    SSLProtocol -all +TLSv1.2 +TLSv1.3
-    SSLCipherSuite TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
-    SSLHonorCipherOrder on
-
-    LimitRequestBody 10485760
+CATALINA_OPTS="$CATALINA_OPTS -Dorg.apache.catalina.STRICT_SERVLET_COMPLIANCE=true"
+CATALINA_OPTS="$CATALINA_OPTS -Dorg.apache.catalina.connector.RECYCLE_FACADES=true"
 
 
-    Header always set Strict-Transport-Security "max-age=31536000"
+server.xml
+zmiana numeru portu 8005 na -1 <Server port="-1">
 
-    Header always set X-Content-Type-Options "nosniff"
-    Header always set X-Frame-Options "DENY"
-    Header always set X-XSS-Protection "1; mode=block"
-    Header always set Referrer-Policy "strict-origin-when-cross-origin"
 
-    <Directory "D:/xampp/htdocs/DOCROOT/public">
-        AllowOverride All
-        Require all granted
-        <LimitExcept GET POST>
-            Deny from all
-        </LimitExcept>
-    </Directory>
+zakomentowac albo usunac wpis
+<Realm className="org.apache.catalina.realm.UserDatabaseRealm" resourceName="UserDatabase"/>
 
-    ErrorLog "logs/ssl_error.log"
-    CustomLog "logs/ssl_access.log" combined
+w sekcji Engine dodac
+<Valve className="org.apache.catalina.valves.RemoteIpValve"
+       requestAttributesEnabled="true"
+       internalProxies="127\.0\.0\.1" />
 
-</VirtualHost>
+       
+dać na false sekcje xpoweredBy="false" i dać server="SecureServer" dla każdego connectora
+
+
+
+web.xml
+w web-app dać
+
+<session-config>
+  <cookie-config>
+    <secure>true</secure>
+    <http-only>true</http-only>
+    <same-site>strict</same-site>
+  </cookie-config>
+</session-config>
+
+dodać do webxml
+<error-page>
+    <exception-type>java.lang.Throwable</exception-type>
+    <location>/error.jsp</location>
+</error-page>
