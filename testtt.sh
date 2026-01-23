@@ -1,41 +1,23 @@
-setenv.sh
+#!/bin/ksh
+SEARCH="TESTOWY123"
+DBNAME="moja_baza"
 
-#!/bin/sh
+dbaccess $DBNAME <<SQL | awk '{print $1,$2}' > columns.txt
+SELECT t.tabname, c.colname
+FROM systables t
+JOIN syscolumns c ON t.tabid = c.tabid
+WHERE c.coltype IN (0,13,17) -- CHAR, LVARCHAR, TEXT
+AND t.tabid >= 100;
+SQL
 
-CATALINA_OPTS="$CATALINA_OPTS -Dorg.apache.catalina.STRICT_SERVLET_COMPLIANCE=true"
-CATALINA_OPTS="$CATALINA_OPTS -Dorg.apache.catalina.connector.RECYCLE_FACADES=true"
-
-
-server.xml
-zmiana numeru portu 8005 na -1 <Server port="-1">
-
-
-zakomentowac albo usunac wpis
-<Realm className="org.apache.catalina.realm.UserDatabaseRealm" resourceName="UserDatabase"/>
-
-w sekcji Engine dodac
-<Valve className="org.apache.catalina.valves.RemoteIpValve"
-       requestAttributesEnabled="true"
-       internalProxies="127\.0\.0\.1" />
-
-       
-dać na false sekcje xpoweredBy="false" i dać server="SecureServer" dla każdego connectora
-
-
-
-web.xml
-w web-app dać
-
-<session-config>
-  <cookie-config>
-    <secure>true</secure>
-    <http-only>true</http-only>
-    <same-site>strict</same-site>
-  </cookie-config>
-</session-config>
-
-dodać do webxml
-<error-page>
-    <exception-type>java.lang.Throwable</exception-type>
-    <location>/error.jsp</location>
-</error-page>
+# sprawdz każdą kolumnę
+while read table col
+do
+  echo "Sprawdzam $table.$col ..."
+  dbaccess $DBNAME <<SQL
+    SELECT "$table.$col" AS found_in
+    FROM $table
+    WHERE $col LIKE '%$SEARCH%'
+    FIRST 1;
+SQL
+done
