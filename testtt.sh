@@ -1,3 +1,15 @@
-export PATH=$INFORMIXDIR/bin:$PATH
-export LD_LIBRARY_PATH=$INFORMIXDIR/lib:$INFORMIXDIR/lib/esql:$LD_LIBRARY_PATH
-export IFXMSGS=$INFORMIXDIR/msg
+🔹 DB_ROLE (pewne 100%)
+SELECT
+CASE
+  WHEN dbservername = primarysrv THEN 'PRIMARY'
+  ELSE 'SECONDARY'
+END AS db_role
+FROM sysmaster:sysdual;
+
+🔹 DB_ACCESS_MODE
+SELECT
+CASE
+  WHEN dbservername = primarysrv THEN 'read-write'
+  ELSE 'RO'
+END AS db_access_mode
+FROM sysmaster:sysdual;
