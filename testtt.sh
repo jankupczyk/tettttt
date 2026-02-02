@@ -1,56 +1,93 @@
-SELECT DB_NAME() AS DB_NAME_LOGICAL;
-Jeśli chcesz wszystkie bazy w AG:
+SQL:
+SELECT name AS DB_NAME_LOGICAL
+FROM sysdatabases
+WHERE is_default = 't';
+
+
+Jeśli nie używacie default:
 
 SELECT name AS DB_NAME_LOGICAL
-FROM sys.databases
-WHERE database_id > 4;
-2️⃣ CLUSTER_ID
-🔹 AlwaysOn Availability Group
-To jest idealny CLUSTER_ID – jeden, wspólny na wszystkie węzły.
+FROM sysdatabases
+WHERE name NOT IN ('sysmaster','sysutils','sysadmin');
 
-SELECT name AS CLUSTER_ID
-FROM sys.availability_groups;
-Jeśli masz kilka AG → filtrujesz po DB_NAME_LOGICAL.
-
-3️⃣ DB_ROLE
-Rola tego węzła dla danej bazy:
-
+2️⃣ DB_ROLE (PRIMARY / SECONDARY / STANDBY)
+ŹRÓDŁO PRAWDY: sysmaster
 SELECT
 CASE
-    WHEN rs.role_desc = 'PRIMARY' THEN 'PRIMARY'
-    ELSE 'SECONDARY'
+    WHEN dbservername = primarysrv THEN 'PRIMARY'
+    WHEN dbservername = sds_primary THEN 'SECONDARY'
+    ELSE 'STANDBY'
 END AS DB_ROLE
-FROM sys.dm_hadr_availability_replica_states rs
-WHERE rs.is_local = 1;
-4️⃣ DB_ACCESS_MODE
-Najbezpieczniej nie zgadywać, tylko brać z roli:
+FROM sysmaster:sysdual;
+
+Co to oznacza:
+
+PRIMARY → HDR primary
+
+SECONDARY → SDS (read-only, hot)
+
+STANDBY → RSS (cold / delayed)
+
+3️⃣ DB_ACCESS_MODE
+
+Tu Informix jest najuczciwszy ze wszystkich DB:
 
 SELECT
 CASE
-    WHEN rs.role_desc = 'PRIMARY' THEN 'read-write'
+    WHEN dbservername = primarysrv THEN 'read-write'
     ELSE 'RO'
 END AS DB_ACCESS_MODE
-FROM sys.dm_hadr_availability_replica_states rs
-WHERE rs.is_local = 1;
-🔗 Wszystko w JEDNYM zapytaniu (PROD-READY)
-To jest to, co realnie bym wdrożył:
+FROM sysmaster:sysdual;
+
+
+PRIMARY → RW
+
+SDS / RSS → RO
+
+4️⃣ CLUSTER_ID
+
+Informix nie ma technicznego cluster_id, więc robimy to jak profesjonaliści.
+
+Najlepsza praktyka:
+CLUSTER_ID = HDR_<PRIMARY_SERVERNAME>
+
+SQL:
+SELECT
+'HDR_' || primarysrv AS CLUSTER_ID
+FROM sysmaster:sysdual;
+
+
+Ten sam wynik:
+
+na primary
+
+na SDS
+
+na RSS
+
+✔️ jednoznaczny
+✔️ stały
+✔️ audytowo poprawny
+
+🔗 WSZYSTKO W JEDNYM ZAPYTANIU (FINAL)
+
+To jest docelowy wzorzec:
 
 SELECT
-    d.name                                   AS DB_NAME_LOGICAL,
-    ag.name                                  AS CLUSTER_ID,
+    (SELECT name
+     FROM sysdatabases
+     WHERE is_default = 't')            AS DB_NAME_LOGICAL,
+
+    'HDR_' || primarysrv                AS CLUSTER_ID,
+
     CASE
-        WHEN rs.role_desc = 'PRIMARY' THEN 'PRIMARY'
-        ELSE 'SECONDARY'
-    END                                      AS DB_ROLE,
+        WHEN dbservername = primarysrv THEN 'PRIMARY'
+        WHEN dbservername = sds_primary THEN 'SECONDARY'
+        ELSE 'STANDBY'
+    END                                 AS DB_ROLE,
+
     CASE
-        WHEN rs.role_desc = 'PRIMARY' THEN 'read-write'
+        WHEN dbservername = primarysrv THEN 'read-write'
         ELSE 'RO'
-    END                                      AS DB_ACCESS_MODE
-FROM sys.databases d
-JOIN sys.availability_databases_cluster adc
-    ON d.name = adc.database_name
-JOIN sys.availability_groups ag
-    ON adc.group_id = ag.group_id
-JOIN sys.dm_hadr_availability_replica_states rs
-    ON ag.group_id = rs.group_id
-WHERE rs.is_local = 1;
+    END                                 AS DB_ACCESS_MODE
+FROM sysmaster:sysdual;
