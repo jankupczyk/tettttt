@@ -1,93 +1,63 @@
-SQL:
-SELECT name AS DB_NAME_LOGICAL
-FROM sysdatabases
-WHERE is_default = 't';
+Najprościej i najuczciwiej:
+SELECT DBINFO('dbname') AS DB_NAME_LOGICAL FROM systables WHERE tabid = 1;
 
 
-Jeśli nie używacie default:
+(alternatywa, jeśli DBINFO zablokowane):
 
-SELECT name AS DB_NAME_LOGICAL
-FROM sysdatabases
-WHERE name NOT IN ('sysmaster','sysutils','sysadmin');
+SELECT FIRST 1 name AS DB_NAME_LOGICAL FROM systables;
 
-2️⃣ DB_ROLE (PRIMARY / SECONDARY / STANDBY)
-ŹRÓDŁO PRAWDY: sysmaster
-SELECT
-CASE
-    WHEN dbservername = primarysrv THEN 'PRIMARY'
-    WHEN dbservername = sds_primary THEN 'SECONDARY'
-    ELSE 'STANDBY'
-END AS DB_ROLE
-FROM sysmaster:sysdual;
+2️⃣ DB_ROLE
 
-Co to oznacza:
+Nie ma HDR → z definicji PRIMARY
 
-PRIMARY → HDR primary
+SELECT 'PRIMARY' AS DB_ROLE FROM systables WHERE tabid = 1;
 
-SECONDARY → SDS (read-only, hot)
 
-STANDBY → RSS (cold / delayed)
+Nie ma żadnego DMV ani system table, która zwróci coś innego — bo nie może.
 
 3️⃣ DB_ACCESS_MODE
 
-Tu Informix jest najuczciwszy ze wszystkich DB:
+W Informix standalone:
 
+baza zawsze RW, chyba że admin ją ręcznie ustawił jako read-only (rzadkość)
+
+Wariant logiczny (rekomendowany):
+SELECT 'read-write' AS DB_ACCESS_MODE FROM systables WHERE tabid = 1;
+
+Wariant defensywny (techniczny):
 SELECT
 CASE
-    WHEN dbservername = primarysrv THEN 'read-write'
-    ELSE 'RO'
+    WHEN DBINFO('isreadonly') = 1 THEN 'RO'
+    ELSE 'read-write'
 END AS DB_ACCESS_MODE
-FROM sysmaster:sysdual;
+FROM systables
+WHERE tabid = 1;
 
+4️⃣ CLUSTER_ID (LOGICZNY)
 
-PRIMARY → RW
+Tak samo jak w MSSQL:
 
-SDS / RSS → RO
+➡ nie istnieje technicznie
+➡ tworzysz logiczny identyfikator
 
-4️⃣ CLUSTER_ID
+Rekomendacja:
+INF_<INFORMIXSERVER>
 
-Informix nie ma technicznego cluster_id, więc robimy to jak profesjonaliści.
+SELECT 'INF_' || DBINFO('servername') AS CLUSTER_ID
+FROM systables
+WHERE tabid = 1;
 
-Najlepsza praktyka:
-CLUSTER_ID = HDR_<PRIMARY_SERVERNAME>
+🔗 WSZYSTKO W JEDNYM ZAPYTANIU (FINAL – STANDALONE)
 
-SQL:
-SELECT
-'HDR_' || primarysrv AS CLUSTER_ID
-FROM sysmaster:sysdual;
-
-
-Ten sam wynik:
-
-na primary
-
-na SDS
-
-na RSS
-
-✔️ jednoznaczny
-✔️ stały
-✔️ audytowo poprawny
-
-🔗 WSZYSTKO W JEDNYM ZAPYTANIU (FINAL)
-
-To jest docelowy wzorzec:
+To jest docelowy wzorzec, który możesz oddać jako standard:
 
 SELECT
-    (SELECT name
-     FROM sysdatabases
-     WHERE is_default = 't')            AS DB_NAME_LOGICAL,
-
-    'HDR_' || primarysrv                AS CLUSTER_ID,
-
+    DBINFO('dbname')        AS DB_NAME_LOGICAL,
+    'INF_' || DBINFO('servername') AS CLUSTER_ID,
+    'PRIMARY'               AS DB_ROLE,
     CASE
-        WHEN dbservername = primarysrv THEN 'PRIMARY'
-        WHEN dbservername = sds_primary THEN 'SECONDARY'
-        ELSE 'STANDBY'
-    END                                 AS DB_ROLE,
-
-    CASE
-        WHEN dbservername = primarysrv THEN 'read-write'
-        ELSE 'RO'
-    END                                 AS DB_ACCESS_MODE
-FROM sysmaster:sysdual;
+        WHEN DBINFO('isreadonly') = 1 THEN 'RO'
+        ELSE 'read-write'
+    END                     AS DB_ACCESS_MODE
+FROM systables
+WHERE tabid = 1;
