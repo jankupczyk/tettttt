@@ -1,5 +1,9 @@
--- c.data_test BETWEEN pierwszy i ostatni dzień poprzedniego miesiąca
-WHERE c.data_test BETWEEN
-    FIRST_DAY(MONTH(CURRENT - INTERVAL(1) MONTH) TO MONTH)
-    AND
-    LAST_DAY(MONTH(CURRENT - INTERVAL(1) MONTH) TO MONTH)
+-- Pierwszy dzień poprzedniego miesiąca
+DATE(MDY(
+    MONTH(CURRENT) - 1, 1, YEAR(CURRENT)
+)) AS first_day_prev_month
+
+-- Ostatni dzień poprzedniego miesiąca
+DATE(MDY(
+    MONTH(CURRENT), 0, YEAR(CURRENT)
+)) AS last_day_prev_month
