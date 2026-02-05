@@ -1,9 +1,2 @@
--- Pierwszy dzień poprzedniego miesiąca
-DATE(MDY(
-    MONTH(CURRENT) - 1, 1, YEAR(CURRENT)
-)) AS first_day_prev_month
-
--- Ostatni dzień poprzedniego miesiąca
-DATE(MDY(
-    MONTH(CURRENT), 0, YEAR(CURRENT)
-)) AS last_day_prev_month
+zip 2024.zip $(find . -maxdepth 1 -type f -newermt 2024-01-01 ! -newermt 2025-01-01)
+zip 2025.zip $(find . -maxdepth 1 -type f -newermt 2025-01-01 ! -newermt 2026-01-01)
