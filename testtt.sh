@@ -1,7 +1,6 @@
+#!/bin/bash
 
-server.port=8221
-server.ssl.enabled=true
-server.ssl.key-store=classpath:server.p12
-server.ssl.key-store-password=MojeHaslo123
-server.ssl.key-store-type=PKCS12
-server.ssl.key-alias=myapp
+for val in FOLDER1 FOLDER2 FOLDER3
+do
+    ls -1t /test/folder/$val/OUT 2>/dev/null | head -10
+done
