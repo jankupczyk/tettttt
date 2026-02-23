@@ -1,9 +1,7 @@
-onstat -l | awk '
-BEGIN{i=0; bad=0}
-/^[0-9]/ {
-    i++
-    if ($3 !~ /B/) bad++
-}
-END{
-    if (i>0) printf "%.2f\n", 100*bad/i
-}'
+
+server.port=8221
+server.ssl.enabled=true
+server.ssl.key-store=classpath:server.p12
+server.ssl.key-store-password=MojeHaslo123
+server.ssl.key-store-type=PKCS12
+server.ssl.key-alias=myapp
