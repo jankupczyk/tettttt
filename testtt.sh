@@ -1,12 +1,1 @@
-find /dane -mindepth 2 -maxdepth 2 -type d -name OUT -exec sh -c '
-    nik=$(basename "$(dirname "$1")")
-    count=$(find "$1" -maxdepth 1 -type f | wc -l)
-    echo "$nik $count"
-' _ {} \;
-
-
-find /dane -mindepth 2 -maxdepth 2 -type d -name OUT | while read outdir; do 
-    nik=$(basename "$(dirname "$outdir")"); 
-    count=$(find "$outdir" -maxdepth 1 -type f | wc -l); 
-    echo "$nik $count"; 
-done
+mkdir -p /dane/123456/OUT_BAC && find /dane/123456/OUT -maxdepth 1 -type f -newermt "2000-01-01" ! -newermt "2025-01-01" -exec mv {} /dane/123456/OUT_BAC/ \;
