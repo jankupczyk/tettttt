@@ -34,6 +34,17 @@ Import-Module WebAdministration
 $sites = Get-ChildItem IIS:\Sites
 
 foreach ($site in $sites) {
+
     Set-ItemProperty "IIS:\Sites\$($site.Name)" -Name logFile.directory -Value $newLogPath
     Write-Host "Zmieniono folder logów dla strony '$($site.Name)' na $newLogPath"
+
+    Set-WebConfigurationProperty -Filter "system.webServer/security/requestFiltering" -PSPath "IIS:\Sites\$($site.Name)" -Name "allowHighBitCharacters" -Value $false
+    Write-Host "Ustawiono allowHighBitCharacters = False dla strony '$($site.Name)'"
+
+    Set-WebConfigurationProperty -Filter "system.webServer/security/authentication/anonymousAuthentication" -PSPath "IIS:\Sites\$($site.Name)" -Name "enabled" -Value $false
+    Write-Host "Ustawiono anonymousAuthentication = False dla strony '$($site.Name)'"
 }
+
+
+Set-WebConfigurationProperty -Filter "system.applicationHost/sites/siteDefaults/logFile" -PSPath IIS:\ -Name "logExtFileFlags" -Value "Date,Time,ClientIP,Method,UriStem,UserAgent"
+Write-Host "Zmieniono siteDefaults logFieldName na: Date,Time,ClientIP,Method,UriStem,UserAgent"
