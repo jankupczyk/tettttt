@@ -26,3 +26,14 @@ Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -filter "system.a
 
 
 Set-WebConfigurationProperty -pspath 'MACHINE/WEBROOT/APPHOST' -filter "system.web/httpCookies" -name httpOnlyCookies -value True
+
+
+
+$newLogPath = "D:\IISLogs"
+Import-Module WebAdministration
+$sites = Get-ChildItem IIS:\Sites
+
+foreach ($site in $sites) {
+    Set-ItemProperty "IIS:\Sites\$($site.Name)" -Name logFile.directory -Value $newLogPath
+    Write-Host "Zmieniono folder logów dla strony '$($site.Name)' na $newLogPath"
+}
