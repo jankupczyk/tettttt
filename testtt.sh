@@ -1,12 +1,1 @@
-Set-WebConfigurationProperty -Filter "system.webServer/security/requestFiltering" -PSPath IIS:\ -Name "removeServerHeader" -Value $true
-
-
-
-
-
-
-
-
-
-
-Get-WebConfigurationProperty -Filter "system.webServer/security/requestFiltering/fileExtensions/add" -PSPath IIS:\ -Name "." | Select-Object fileExtension, allowed
+tar -xOzf 2025-12.gz.tar 2025-12/test.log.gz | gzip -dc | grep -B1 "Proces "
