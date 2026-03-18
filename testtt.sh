@@ -1,25 +1,12 @@
-BASE=$(pwd)
+#!/bin/bash
 
-find . -exec ls -ld {} \; | awk -v base="$BASE" '
-{
-  perms=$1
-  user=$3
-  group=$4
-  file=$9
+output="prawa_jdk.sh"
+echo "#!/bin/bash" > $output
+echo "set -e" >> $output
 
-  split("rwx", map, "")
-  mode=0
+find . -exec stat -c '%a %U %G %n' {} \; 2>/dev/null | while read mode user group file; do
+    echo "chown $user:$group \"$file\"" >> $output
+    echo "chmod $mode \"$file\"" >> $output
+done
 
-  for(i=2;i<=10;i+=3){
-    val=0
-    if(substr(perms,i,1)=="r") val+=4
-    if(substr(perms,i+1,1)=="w") val+=2
-    if(substr(perms,i+2,1)=="x") val+=1
-    mode = mode*10 + val
-  }
-
-  fullpath = base "/" substr(file,3)
-
-  print "chown " user ":" group " \"" fullpath "\""
-  print "chmod " mode " \"" fullpath "\""
-}'
+chmod +x $output
