@@ -1,16 +1,25 @@
-SELECT i.idxname, d.dbsname
-FROM sysindexes i
-JOIN systables t ON i.tabid = t.tabid
-JOIN sysdbspaces d ON i.dbsnum = d.dbsnum
-WHERE t.tabname = 'transaction'
-AND t.owner = 'powi';
+BASE=$(pwd)
 
+find . -exec ls -ld {} \; | awk -v base="$BASE" '
+{
+  perms=$1
+  user=$3
+  group=$4
+  file=$9
 
+  split("rwx", map, "")
+  mode=0
 
-######################################################
+  for(i=2;i<=10;i+=3){
+    val=0
+    if(substr(perms,i,1)=="r") val+=4
+    if(substr(perms,i+1,1)=="w") val+=2
+    if(substr(perms,i+2,1)=="x") val+=1
+    mode = mode*10 + val
+  }
 
-SELECT t.tabname, d.dbsname
-FROM systables t
-JOIN sysdbspaces d ON t.dbsnum = d.dbsnum
-WHERE t.tabname = 'transaction'
-AND t.owner = 'powi';
+  fullpath = base "/" substr(file,3)
+
+  print "chown " user ":" group " \"" fullpath "\""
+  print "chmod " mode " \"" fullpath "\""
+}'
