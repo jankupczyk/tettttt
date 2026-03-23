@@ -1,14 +1,1 @@
-
-
-=SUMA.JEŻELI(F2:F603;"PLN";E2:E603)
-
-
-
-=SUMA.JEŻELI(F2:F603;"USD";E2:E603)
-
-
-
-=SUMA.JEŻELI(F2:F603;"EUR";E2:E603)
-
-
-=SUMA.JEŻELI(F2:F603;"*";E2:E603)
+grep -Eo "<XchgRate[^>]*></XchgRate>|<XchgRate[^>]*/>" plik.xml | wc -l
