@@ -1,4 +1,3 @@
-for f in *.xml; do
-  cp "$f" "$f.bak"
-  sed -Ei 's|<XchgRate>[[:space:]]*</XchgRate>|<XchgRate>1</XchgRate>|g; s|<XchgRate[[:space:]]*/>|<XchgRate>1</XchgRate>|g' "$f"
+for f in *_*.xml; do
+    mv "$f" "$(echo "$f" | sed -E 's/_[0-9]{8}\.xml$/.xml/')"
 done
