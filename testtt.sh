@@ -5,22 +5,18 @@ use warnings;
 
 my $onstat = `onstat -u`;
 
-my ($total);
-if ($onstat =~ /\d+\s+active,\s+(\d+)\s+total/) {
-    $total = $1;
+my ($active, $total);
+
+if ($onstat =~ /(\d+)\s+active,\s+(\d+)\s+total/) {
+    ($active, $total) = ($1, $2);
 } else {
-    die "Cannot parse total connections";
+    die "Cannot parse onstat -u output";
 }
 
-my $cfg = `onstat -g cfg | grep USERTHREADS`;
-
-$cfg =~ /USERTHREADS\s+(\d+)/;
-my $max = $1;
-
-if (!$max) {
-    die "Cannot read USERTHREADS";
+if ($total == 0) {
+    die "Total is zero";
 }
 
-my $usage = ($total / $max) * 100;
+my $usage = ($active / $total) * 100;
 
 printf "%.2f\n", $usage;
