@@ -1,45 +1,26 @@
---tabele
-ALTER TABLE public.test_p OWNER TO test_user;
-GRANT ALL PRIVILEGES ON TABLE public.test_p TO test_user;
+#!/usr/bin/perl
 
-ALTER TABLE public.inna_tabela OWNER TO test_user;
-GRANT ALL PRIVILEGES ON TABLE public.inna_tabela TO test_user;
+use strict;
+use warnings;
 
---widoki
-ALTER VIEW public.v_test_op OWNER TO test_user;
-GRANT SELECT ON public.v_test_op TO test_user;
+my $onstat = `onstat -u`;
 
-ALTER VIEW public.v_inny OWNER TO test_user;
-GRANT SELECT ON public.v_inny TO test_user;
+my ($total);
+if ($onstat =~ /\d+\s+active,\s+(\d+)\s+total/) {
+    $total = $1;
+} else {
+    die "Cannot parse total connections";
+}
 
---widoki zmaterializowane
-ALTER MATERIALIZED VIEW public.mv_test OWNER TO test_user;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.mv_test TO test_user;
+my $cfg = `onstat -g cfg | grep USERTHREADS`;
 
---sekwencje
-ALTER SEQUENCE public.seq_test OWNER TO test_user;
-GRANT ALL PRIVILEGES ON SEQUENCE public.seq_test TO test_user;
+$cfg =~ /USERTHREADS\s+(\d+)/;
+my $max = $1;
 
-ALTER SEQUENCE public.seq_inna OWNER TO test_user;
-GRANT ALL PRIVILEGES ON SEQUENCE public.seq_inna TO test_user;
+if (!$max) {
+    die "Cannot read USERTHREADS";
+}
 
---funkcje procedury
-GRANT EXECUTE ON FUNCTION public.nazwa_funkcji(param_typ) TO test_user;
-GRANT EXECUTE ON FUNCTION public.inna_funkcja(param_typ) TO test_user;
+my $usage = ($total / $max) * 100;
 
---domeny
-GRANT USAGE ON TYPE public.nazwa_typu TO test_user;
-GRANT USAGE ON DOMAIN public.nazwa_domeny TO test_user;
-
---schematy
-GRANT USAGE ON SCHEMA public TO test_user;
-
---domyslne uprawnienia dla nowych obiektow
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-GRANT ALL PRIVILEGES ON TABLES TO test_user;
-
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-GRANT ALL PRIVILEGES ON SEQUENCES TO test_user;
-
---usuniecie su,cr,cdb
-ALTER ROLE test_user NOSUPERUSER NOCREATEROLE NOCREATEDB;
+printf "%.2f\n", $usage;
