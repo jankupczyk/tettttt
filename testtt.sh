@@ -3,18 +3,29 @@
 use strict;
 use warnings;
 
-my $onstat = `onstat -u`;
+open my $onstat, "-|", "$ENV{INFORMIXDIR}/bin/onstat -u"
+    or die "Cannot run onstat";
 
 my ($active, $total);
 
-if ($onstat =~ /(\d+)\s+active,\s+(\d+)\s+total/) {
-    ($active, $total) = ($1, $2);
-} else {
-    die "Cannot parse onstat -u output";
+while (my $line = <$onstat>) {
+    if ($line =~ /(\d+)\D+(\d+)\D+(\d+)/) {
+
+        my ($a, $t, $m) = ($1, $2, $3);
+        next if $a > $t;          # active nie może być > total
+        next if $t == 0;          # total musi mieć sens
+        next if $m < $a;          # max >= active
+
+        $active = $a;
+        $total  = $t;
+        last;
+    }
 }
 
-if ($total == 0) {
-    die "Total is zero";
+close $onstat;
+
+unless (defined $active && defined $total && $total > 0) {
+    die "Cannot parse onstat -u output";
 }
 
 my $usage = ($active / $total) * 100;
