@@ -1,3 +1,10 @@
-$ENV{'INFORMIXDIR'}    ||= '/opt/informix';   # ścieżka do Informix
-$ENV{'INFORMIXSERVER'} ||= 'informix';       # nazwa serwera
-$ENV{'PATH'} = "$ENV{INFORMIXDIR}/bin:$ENV{PATH}";
+import pika
+
+try:
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(host='127.0.0.1', port=9443)
+    )
+    print("OK")
+    connection.close()
+except Exception as e:
+    print("FAIL")
