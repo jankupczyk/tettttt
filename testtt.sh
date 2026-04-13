@@ -1,23 +1,7 @@
-echo $PATH
+DATA=$(date +%Y%m%d)
 
-
-PATH=$(echo $PATH | sed 's/::/:/g' | sed 's/^\.://g' | sed 's/:\.//g')
-export PATH
-
-
-grep PATH ~/.profile ~/.kshrc /etc/profile
-
-
-PATH=.:$PATH
-
-
-PATH=$PATH
-
-
-PATH=/usr/bin:/bin:/usr/sbin:/etc
-
-
-. ~/.profile
-
-
-echo $PATH | grep '\.'
+for f in /data/in/*; do
+    if [ -f "$f" ]; then
+        cp "$f" "/data/archive/$(basename "$f").$DATA"
+    fi
+done
