@@ -1,13 +1,13 @@
-DATA=$(date +%Y%m%d_%H%M%S)
+DECLARE @search NVARCHAR(100) = '%German%'
+DECLARE @sql NVARCHAR(MAX) = ''
 
+SELECT @sql += 'SELECT ''' + t.TABLE_SCHEMA + '.' + t.TABLE_NAME + '.' + c.COLUMN_NAME + ''' AS lokalizacja, CAST(' + QUOTENAME(c.COLUMN_NAME) + ' AS NVARCHAR(MAX)) AS wartosc FROM ' + QUOTENAME(t.TABLE_SCHEMA) + '.' + QUOTENAME(t.TABLE_NAME) + ' WHERE ' + QUOTENAME(c.COLUMN_NAME) + ' LIKE ' + '''' + @search + '''' + ' UNION ALL '
+FROM INFORMATION_SCHEMA.TABLES t
+JOIN INFORMATION_SCHEMA.COLUMNS c ON t.TABLE_NAME = c.TABLE_NAME AND t.TABLE_SCHEMA = c.TABLE_SCHEMA
+WHERE t.TABLE_TYPE = 'BASE TABLE'
+AND c.DATA_TYPE IN ('char','nchar','varchar','nvarchar','text','ntext')
 
-for f in /data/in/*; do
-    [ -f "$f" ] || continue
-    cp "$f" "$ARCH_DIR/$(basename "$f").$DATA"
-done
+-- Usuń ostatnie UNION ALL
+SET @sql = LEFT(@sql, LEN(@sql) - 10)
 
-for f in /data/in/*; do
-    if [ -f "$f" ]; then
-        cp "$f" "/data/archive/$(basename "$f").$DATA"
-    fi
-done
+EXEC sp_executesql @sql
