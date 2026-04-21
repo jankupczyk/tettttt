@@ -1,13 +1,34 @@
-DECLARE @search NVARCHAR(100) = '%German%'
-DECLARE @sql NVARCHAR(MAX) = ''
+# === SECURITY HARDENING ===
 
-SELECT @sql += 'SELECT ''' + t.TABLE_SCHEMA + '.' + t.TABLE_NAME + '.' + c.COLUMN_NAME + ''' AS lokalizacja, CAST(' + QUOTENAME(c.COLUMN_NAME) + ' AS NVARCHAR(MAX)) AS wartosc FROM ' + QUOTENAME(t.TABLE_SCHEMA) + '.' + QUOTENAME(t.TABLE_NAME) + ' WHERE ' + QUOTENAME(c.COLUMN_NAME) + ' LIKE ' + '''' + @search + '''' + ' UNION ALL '
-FROM INFORMATION_SCHEMA.TABLES t
-JOIN INFORMATION_SCHEMA.COLUMNS c ON t.TABLE_NAME = c.TABLE_NAME AND t.TABLE_SCHEMA = c.TABLE_SCHEMA
-WHERE t.TABLE_TYPE = 'BASE TABLE'
-AND c.DATA_TYPE IN ('char','nchar','varchar','nvarchar','text','ntext')
+# Limit request body (DoS protection)
+LimitRequestBody 10485760
 
--- Usuń ostatnie UNION ALL
-SET @sql = LEFT(@sql, LEN(@sql) - 10)
+# Request timeouts (Slowloris protection)
+RequestReadTimeout header=20-40,MinRate=500 body=20,MinRate=500
 
-EXEC sp_executesql @sql
+# Global timeout
+TimeOut 120
+
+# KeepAlive settings
+KeepAlive On
+MaxKeepAliveRequests 100
+KeepAliveTimeout 5
+
+# Hide server details
+ServerTokens Prod
+ServerSignature Off
+
+# Logging format
+LogFormat "%h %l %u %t \"%r\" %>s %b" combined
+CustomLog logs/access_log combined
+
+# Disable risky options on root
+<Directory />
+    Options None
+    AllowOverride None
+</Directory>
+
+# Basic header sanity (requires mod_headers)
+<IfModule mod_headers.c>
+    Header always unset X-Powered-By
+</IfModule>
