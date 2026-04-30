@@ -16,6 +16,25 @@ print $fh $doc->toString(1);
 close($fh);
 
 
+
+
+
+
+use XML::LibXML;
+
+my $parser = XML::LibXML->new();
+my $doc = $parser->parse_file('plik.xml');
+
+for my $node ($doc->findnodes(
+  '//component[contains(@location, "informix_12.10")]'
+)) {
+    $node->parentNode->removeChild($node);
+}
+
+open(my $fh, '>', 'wynik.xml');
+print $fh $doc->toString(1);
+close($fh);
+
 # === SECURITY HARDENING ===
 
 # Limit request body (DoS protection)
