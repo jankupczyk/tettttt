@@ -59,6 +59,37 @@ close($fh);
 
 
 
+
+
+
+use XML::LibXML;
+
+my $parser = XML::LibXML->new();
+$parser->keep_blanks(0);
+
+my $doc = $parser->parse_file('plik.xml');
+
+# usuwanie komponentów Informix
+for my $node ($doc->findnodes(
+  '//component[
+    contains(
+      translate(@location,"ABCDEFGHIJKLMNOPQRSTUVWXYZ._","abcdefghijklmnopqrstuvwxyz"),
+      "informix1210"
+    )
+  ]'
+)) {
+    $node->parentNode->removeChild($node);
+}
+
+# 🧹 czyszczenie pustych linii po usunięciu
+for my $node ($doc->findnodes('//text()[normalize-space(.)=""]')) {
+    $node->parentNode->removeChild($node);
+}
+
+open(my $fh, '>', 'wynik.xml');
+print $fh $doc->toString(1);
+close($fh);
+
 # Limit request body (DoS protection)
 LimitRequestBody 10485760
 
