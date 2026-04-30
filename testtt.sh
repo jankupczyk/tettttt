@@ -37,6 +37,28 @@ close($fh);
 
 # === SECURITY HARDENING ===
 
+use XML::LibXML;
+
+my $parser = XML::LibXML->new();
+my $doc = $parser->parse_file('plik.xml');
+
+for my $node ($doc->findnodes(
+  '//component[
+    contains(
+      translate(@location,"ABCDEFGHIJKLMNOPQRSTUVWXYZ._","abcdefghijklmnopqrstuvwxyz"),
+      "informix1210"
+    )
+  ]'
+)) {
+    $node->parentNode->removeChild($node);
+}
+
+open(my $fh, '>', 'wynik.xml');
+print $fh $doc->toString(1);
+close($fh);
+
+
+
 # Limit request body (DoS protection)
 LimitRequestBody 10485760
 
