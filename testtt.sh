@@ -90,35 +90,10 @@ open(my $fh, '>', 'wynik.xml');
 print $fh $doc->toString(1);
 close($fh);
 
-# Limit request body (DoS protection)
-LimitRequestBody 10485760
+validationQuery="SELECT 1 FROM systables WHERE tabid = 1"
+ validationQueryTimeout="5"
+ testOnBorrow="true"
+ testWhileIdle="true"
+ timeBetweenEvictionRunsMillis="30000"
+ minEvictableIdleTimeMillis="60000"
 
-# Request timeouts (Slowloris protection)
-RequestReadTimeout header=20-40,MinRate=500 body=20,MinRate=500
-
-# Global timeout
-TimeOut 120
-
-# KeepAlive settings
-KeepAlive On
-MaxKeepAliveRequests 100
-KeepAliveTimeout 5
-
-# Hide server details
-ServerTokens Prod
-ServerSignature Off
-
-# Logging format
-LogFormat "%h %l %u %t \"%r\" %>s %b" combined
-CustomLog logs/access_log combined
-
-# Disable risky options on root
-<Directory />
-    Options None
-    AllowOverride None
-</Directory>
-
-# Basic header sanity (requires mod_headers)
-<IfModule mod_headers.c>
-    Header always unset X-Powered-By
-</IfModule>
