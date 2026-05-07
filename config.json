@@ -1,0 +1,134 @@
+{
+  "Global": {
+    "InstallerShare": "\\\\wro01scl\\install\\Aplikacje",
+    "LogPath": "C:\\ProgramData\\EnterpriseAppUpdater\\Logs\\updater.log",
+    "RollbackPath": "C:\\ProgramData\\EnterpriseAppUpdater\\Rollback",
+    "TempPath": "C:\\ProgramData\\EnterpriseAppUpdater\\Temp",
+    "ProcessTimeoutSeconds": 3600,
+    "EnableSignatureValidation": true,
+    "EnableChecksumValidation": true,
+    "MaxParallelJobs": 3
+  },
+
+  "Applications": [
+
+    {
+      "AppId": "NOTEPADPP",
+      "FriendlyName": "Notepad++",
+      "DisplayNamePatterns": [
+        "Notepad++"
+      ],
+
+      "PublisherPatterns": [
+        "Notepad++"
+      ],
+
+      "Folder": "N",
+      "SearchPattern": "npp*.exe",
+      "InstallerType": "EXE",
+      "SilentArgs": "/S",
+      "ParallelSafe": true,
+      "EnableRollback": true,
+      "Enabled": true
+    },
+
+    {
+      "AppId": "WINSCP",
+      "FriendlyName": "WinSCP",
+      "DisplayNamePatterns": [
+        "WinSCP"
+      ],
+
+      "PublisherPatterns": [
+        "Martin Prikryl"
+      ],
+
+      "Folder": "W",
+      "SearchPattern": "WinSCP*.exe",
+      "InstallerType": "EXE",
+      "SilentArgs": "/VERYSILENT /NORESTART",
+      "ParallelSafe": true,
+      "EnableRollback": true,
+      "Enabled": true
+    },
+
+    {
+      "AppId": "VSCODE",
+      "FriendlyName": "Visual Studio Code",
+      "DisplayNamePatterns": [
+        "Visual Studio Code",
+        "Microsoft Visual Studio Code"
+      ],
+
+      "PublisherPatterns": [
+        "Microsoft"
+      ],
+
+      "Folder": "M",
+      "SearchPattern": "MicrosoftVisualStudioCode*.exe",
+      "InstallerType": "EXE",
+      "SilentArgs": "/VERYSILENT /NORESTART /MERGETASKS=!runcode",
+      "ParallelSafe": true,
+      "EnableRollback": true,
+      "Enabled": true
+    },
+
+    {
+      "AppId": "CHROME",
+      "FriendlyName": "Google Chrome",
+      "DisplayNamePatterns": [
+        "Google Chrome"
+      ],
+
+      "PublisherPatterns": [
+        "Google"
+      ],
+
+      "Folder": "G",
+      "SearchPattern": "*Chrome*.msi",
+      "InstallerType": "MSI",
+      "SilentArgs": "/qn /norestart",
+      "ParallelSafe": true,
+      "EnableRollback": true,
+      "Enabled": true
+    },
+
+    {
+      "AppId": "EDGE",
+      "FriendlyName": "Microsoft Edge",
+      "DisplayNamePatterns": [
+        "Microsoft Edge"
+      ],
+
+      "PublisherPatterns": [
+        "Microsoft"
+      ],
+
+      "Folder": "M",
+      "SearchPattern": "*Edge*.msi",
+      "InstallerType": "MSI",
+      "SilentArgs": "/qn /norestart",
+      "ParallelSafe": false,
+      "EnableRollback": true,
+      "Enabled": true
+    },
+
+    {
+      "AppId": "FIREFOX",
+      "FriendlyName": "Mozilla Firefox",
+      "DisplayNamePatterns": [
+        "Mozilla Firefox"
+      ],
+      "PublisherPatterns": [
+        "Mozilla"
+      ],
+      "Folder": "F",
+      "SearchPattern": "*Firefox*.exe",
+      "InstallerType": "EXE",
+      "SilentArgs": "-ms",
+      "ParallelSafe": true,
+      "EnableRollback": true,
+      "Enabled": true
+    }
+  ]
+}
