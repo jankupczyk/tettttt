@@ -48,10 +48,10 @@ The updater is designed for enterprise environments where applications are centr
 ```text
 \\wro01scl\install\Aplikacje\
 │
-├── N\
-│   └── Notepad++\
+├── <GŁÓWNY KATALOG>\
+│   └── <APLIKACJA>\
 │       └── Live\
-│           └── npp.8.9.3.Installer.x64.exe
+│           └──<INSTALKA>
 ```
 
 ---
@@ -65,7 +65,6 @@ C:\ProgramData\EnterpriseAppUpdater\
 ├── Logs\
 ├── Rollback\
 ├── Temp\
-└── Scripts\
 ```
 
 ---
@@ -88,10 +87,10 @@ Pobierz plik WinAppUpdater.zip i rozpakuj w lokalizacji "C:\ProgramData\Enterpri
 powershell.exe -ExecutionPolicy Bypass -File "C:\ProgramData\EnterpriseAppUpdater\Scripts\Update-Applications.ps1"
 ```
 
-## Simulation Mode
+## Dry run
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File "C:\ProgramData\EnterpriseAppUpdater\Scripts\Update-Applications.ps1" -SimulationMode
+powershell.exe -ExecutionPolicy Bypass -File "C:\ProgramData\EnterpriseAppUpdater\Scripts\Update-Applications.ps1" -DryRunMode
 ```
 
 ---
