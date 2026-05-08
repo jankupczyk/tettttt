@@ -7,6 +7,24 @@ Where-Object {
 }
 
 
+function Convert-ToVersion {
+
+    param([string]$Version)
+
+    try {
+
+        $cleanVersion = (
+            $Version -split '[^0-9\.]'
+        )[0]
+
+        return [System.Version]$cleanVersion
+    }
+    catch {
+
+        return [System.Version]'0.0.0.0'
+    }
+}
+
 
 #requires -version 5.1
 
