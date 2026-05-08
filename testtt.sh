@@ -1,30 +1,51 @@
-Where-Object {
+function Get-RemoteVersion {
 
-    $_.PSObject.Properties['DisplayName'] -and
-    $_.PSObject.Properties['DisplayVersion'] -and
-    $null -ne $_.DisplayName -and
-    $null -ne $_.DisplayVersion
-}
-
-
-function Convert-ToVersion {
-
-    param([string]$Version)
+    param(
+        [object]$AppConfig,
+        [object]$Installer
+    )
 
     try {
 
-        $cleanVersion = (
-            $Version -split '[^0-9\.]'
-        )[0]
+        switch ($AppConfig.VersionSource) {
 
-        return [System.Version]$cleanVersion
+            'Filename' {
+
+                if ($Installer.Name -match '([0-9]+\.[0-9]+\.[0-9]+)') {
+
+                    return $matches[1]
+                }
+            }
+
+            'ProductVersion' {
+
+                return (
+                    Get-Item $Installer.FullName
+                ).VersionInfo.ProductVersion
+            }
+
+            'FileVersion' {
+
+                return (
+                    Get-Item $Installer.FullName
+                ).VersionInfo.FileVersion
+            }
+
+            default {
+
+                return (
+                    Get-Item $Installer.FullName
+                ).VersionInfo.ProductVersion
+            }
+        }
     }
     catch {
 
-        return [System.Version]'0.0.0.0'
+        return $null
     }
-}
 
+    return $null
+}
 
 #requires -version 5.1
 
