@@ -1,3 +1,13 @@
+Where-Object {
+
+    $_.PSObject.Properties['DisplayName'] -and
+    $_.PSObject.Properties['DisplayVersion'] -and
+    $null -ne $_.DisplayName -and
+    $null -ne $_.DisplayVersion
+}
+
+
+
 #requires -version 5.1
 
 [CmdletBinding(SupportsShouldProcess)]
