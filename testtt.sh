@@ -1,51 +1,6 @@
-function Get-RemoteVersion {
-
-    param(
-        [object]$AppConfig,
-        [object]$Installer
-    )
-
-    try {
-
-        switch ($AppConfig.VersionSource) {
-
-            'Filename' {
-
-                if ($Installer.Name -match '([0-9]+\.[0-9]+\.[0-9]+)') {
-
-                    return $matches[1]
-                }
-            }
-
-            'ProductVersion' {
-
-                return (
-                    Get-Item $Installer.FullName
-                ).VersionInfo.ProductVersion
-            }
-
-            'FileVersion' {
-
-                return (
-                    Get-Item $Installer.FullName
-                ).VersionInfo.FileVersion
-            }
-
-            default {
-
-                return (
-                    Get-Item $Installer.FullName
-                ).VersionInfo.ProductVersion
-            }
-        }
-    }
-    catch {
-
-        return $null
-    }
-
-    return $null
-}
+$remoteVersionRaw = Get-RemoteVersion `
+    -AppConfig $AppConfig `
+    -Installer $installer
 
 #requires -version 5.1
 
