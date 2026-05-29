@@ -38,3 +38,15 @@ WHERE query ILIKE '%ppd_kom%'
    OR query ILIKE '%ppd_swift%'
 ORDER BY calls DESC
 LIMIT 10;
+
+
+
+SELECT 
+  tablename,
+  indexname,
+  idx_scan AS uzycia,
+  pg_size_pretty(pg_relation_size(indexrelid)) AS rozmiar
+FROM pg_stat_user_indexes
+WHERE idx_scan = 0
+  AND indexname NOT LIKE '%pkey%'
+ORDER BY pg_relation_size(indexrelid) DESC;
