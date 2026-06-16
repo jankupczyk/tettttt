@@ -98,64 +98,23 @@ print "OK\n";
 exit 0;
 
 
-python3 -c '
-import os, base64, struct
+sudo ksh -c '
+for pub in /etc/ssh/*.pub; do
+    [ -f "$pub" ] || continue
+    b64=$(awk "{print \$2}" "$pub")
+    bits=$(echo "$b64" | awk "BEGIN { str = \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\" ; for(i=0; i<64; i++) d[substr(str, i+1, 1)] = i } { len = length(\$0); bin = \"\"; for(i=1; i<=len && i<=80; i++) { c = substr(\$0, i, 1); if (c == \"=\") break; val = d[c]; bits_str = \"\"; for(j=0; j<6; j++) { bits_str = (val % 2) bits_str; val = int(val / 2) }; bin = bin bits_str }; for(i=1; i<=length(bin); i+=8) { b[int(i/8)] = 0; for(j=0; j<8; j++) { if(substr(bin, i+j, 1) == \"1\") b[int(i/8)] += 2^(7-j) } }; alg_len = b[0]*16777216 + b[1]*65536 + b[2]*256 + b[3]; e_offset = 4 + alg_len; e_len = b[e_offset]*16777216 + b[e_offset+1]*65536 + b[e_offset+2]*256 + b[e_offset+3]; n_offset = e_offset + 4 + e_len; n_len = b[n_offset]*16777216 + b[n_offset+1]*65536 + b[n_offset+2]*256 + b[n_offset+3]; first_b = b[n_offset+4]; if (first_b == 0) n_len--; print n_len * 8 }")
 
-for f in os.listdir("/etc/ssh/"):
-    if f.endswith(".pub"):
-        pub_path = os.path.join("/etc/ssh/", f)
-        priv_path = pub_path.rsplit(".pub", 1)[0]
-        try:
-            with open(pub_path, "r") as file:
-                parts = file.read().split()
-                if len(parts) < 2: continue
-                key_bytes = base64.b64decode(parts[1])
-                alg_len = struct.unpack(">I", key_bytes[:4])[0]
-                e_len = struct.unpack(">I", key_bytes[4+alg_len:8+alg_len])[0]
-                n_len = struct.unpack(">I", key_bytes[8+alg_len+e_len:12+alg_len+e_len])[0]
-                n_bytes = key_bytes[12+alg_len+e_len : 12+alg_len+e_len+n_len]
-                bits = (len(n_bytes) - (1 if n_bytes[0] == 0 else 0)) * 8
-                
-                if bits == 1024:
-                    print(f"Do usunięcia (Para 1024 bit):")
-                    print(f"  -> Publiczny: {pub_path}")
-                    if os.path.exists(priv_path):
-                        print(f"  -> Prywatny:  {priv_path}")
-                    else:
-                        print(f"  -> Prywatny:  Nie znaleziono pliku prywatnego")
-        except Exception:
-            pass
+    if [ "$bits" = "1024" ]; then
+        priv="${pub%.pub}"
+        echo "Usuwam plik publiczny: $pub"
+        rm -f "$pub"
+        if [ -f "$priv" ]; then
+            echo "Usuwam plik prywatny:  $priv"
+            rm -f "$priv"
+        fi
+    fi
+done
 '
-
-sudo python3 -c '
-import os, base64, struct
-
-for f in os.listdir("/etc/ssh/"):
-    if f.endswith(".pub"):
-        pub_path = os.path.join("/etc/ssh/", f)
-        priv_path = pub_path.rsplit(".pub", 1)[0]
-        try:
-            with open(pub_path, "r") as file:
-                parts = file.read().split()
-                if len(parts) < 2: continue
-                key_bytes = base64.b64decode(parts[1])
-                alg_len = struct.unpack(">I", key_bytes[:4])[0]
-                e_len = struct.unpack(">I", key_bytes[4+alg_len:8+alg_len])[0]
-                n_len = struct.unpack(">I", key_bytes[8+alg_len+e_len:12+alg_len+e_len])[0]
-                n_bytes = key_bytes[12+alg_len+e_len : 12+alg_len+e_len+n_len]
-                bits = (len(n_bytes) - (1 if n_bytes[0] == 0 else 0)) * 8
-                
-                if bits == 1024:
-                    print(f"Usuwam klucz publiczny: {pub_path}")
-                    os.remove(pub_path)
-                    if os.path.exists(priv_path):
-                        print(f"Usuwam klucz prywatny:  {priv_path}")
-                        os.remove(priv_path)
-        except Exception:
-            pass
-'
-
-
 
 
 
