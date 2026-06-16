@@ -96,3 +96,10 @@ if ($found) {
 
 print "OK\n";
 exit 0;
+
+
+for k in /etc/ssh/*.pub; do if ssh-keygen -lf "$k" | grep -q "1024"; then echo "Do usunięcia: $k"; ssh-keygen -lf "$k"; fi; done
+for k in /etc/ssh/*.pub; do if ssh-keygen -lf "$k" | grep -q "1024"; then echo "Usuwam: $k"; rm "$k"; fi; done
+
+
+
