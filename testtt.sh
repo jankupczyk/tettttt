@@ -1,16 +1,98 @@
-SELECT 
-    DB_NAME(database_id) AS baza,
-    OBJECT_NAME(object_id) AS procedura
-FROM sys.objects  -- to nie zadziała cross-db, użyj poniższego
+#!/usr/bin/perl
 
+use strict;
+use warnings;
+use Fcntl qw(SEEK_SET);
 
-EXEC sp_MSforeachdb '
-USE [?];
-IF EXISTS (SELECT 1 FROM sys.objects WHERE name = ''REP_P_run'' AND type = ''P'')
-    SELECT ''?'' AS baza, name FROM sys.objects WHERE name = ''REP_P_run''
-'
+my $LOGDIR = "/home/app/logs";
+my $STATE  = "/var/tmp/log_monitor.state";
 
+my @patterns = (
+    qr/Program error/,
+    qr/A character variable has referenced subscripts that/
+);
 
-SELECT step_name, database_name, command
-FROM msdb.dbo.sysjobsteps
-WHERE job_id = 'DE1CCBCA-6A80-453D-B0CD-3BA1F63A03DF'
+my %offsets;
+
+if (-f $STATE) {
+    open(my $sfh, "<", $STATE) or die "Cannot open state file";
+
+    while (<$sfh>) {
+        chomp;
+        my ($file,$offset) = split(/\|/, $_, 2);
+        $offsets{$file} = $offset;
+    }
+
+    close($sfh);
+}
+
+my $found = 0;
+my @alerts;
+
+opendir(my $dh, $LOGDIR) or die "Cannot open $LOGDIR";
+
+while (my $file = readdir($dh)) {
+
+    next if $file =~ /^\./;
+
+    my $full = "$LOGDIR/$file";
+
+    next unless -f $full;
+
+    my $size = -s $full;
+
+    my $offset = $offsets{$full} || 0;
+
+    if ($offset > $size) {
+        $offset = 0;
+    }
+
+    open(my $fh, "<", $full) or next;
+
+    seek($fh, $offset, SEEK_SET);
+
+    while (my $line = <$fh>) {
+
+        foreach my $pattern (@patterns) {
+
+            if ($line =~ $pattern) {
+
+                chomp $line;
+
+                push @alerts,
+                     "$full => $line";
+
+                $found = 1;
+            }
+        }
+    }
+
+    $offsets{$full} = tell($fh);
+
+    close($fh);
+}
+
+closedir($dh);
+
+open(my $sfh, ">", $STATE)
+    or die "Cannot write state file";
+
+foreach my $file (sort keys %offsets) {
+    print $sfh "$file|$offsets{$file}\n";
+}
+
+close($sfh);
+
+if ($found) {
+
+    print "ERROR FOUND\n";
+
+    foreach (@alerts) {
+        print "$_\n";
+    }
+
+    exit 1;
+}
+
+print "OK\n";
+exit 0;
