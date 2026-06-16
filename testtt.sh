@@ -98,8 +98,64 @@ print "OK\n";
 exit 0;
 
 
-for k in /etc/ssh/*.pub; do if ssh-keygen -lf "$k" | grep -q "1024"; then echo "Do usunięcia: $k"; ssh-keygen -lf "$k"; fi; done
-for k in /etc/ssh/*.pub; do if ssh-keygen -lf "$k" | grep -q "1024"; then echo "Usuwam: $k"; rm "$k"; fi; done
+python3 -c '
+import os, base64, struct
+
+for f in os.listdir("/etc/ssh/"):
+    if f.endswith(".pub"):
+        pub_path = os.path.join("/etc/ssh/", f)
+        priv_path = pub_path.rsplit(".pub", 1)[0]
+        try:
+            with open(pub_path, "r") as file:
+                parts = file.read().split()
+                if len(parts) < 2: continue
+                key_bytes = base64.b64decode(parts[1])
+                alg_len = struct.unpack(">I", key_bytes[:4])[0]
+                e_len = struct.unpack(">I", key_bytes[4+alg_len:8+alg_len])[0]
+                n_len = struct.unpack(">I", key_bytes[8+alg_len+e_len:12+alg_len+e_len])[0]
+                n_bytes = key_bytes[12+alg_len+e_len : 12+alg_len+e_len+n_len]
+                bits = (len(n_bytes) - (1 if n_bytes[0] == 0 else 0)) * 8
+                
+                if bits == 1024:
+                    print(f"Do usunięcia (Para 1024 bit):")
+                    print(f"  -> Publiczny: {pub_path}")
+                    if os.path.exists(priv_path):
+                        print(f"  -> Prywatny:  {priv_path}")
+                    else:
+                        print(f"  -> Prywatny:  Nie znaleziono pliku prywatnego")
+        except Exception:
+            pass
+'
+
+sudo python3 -c '
+import os, base64, struct
+
+for f in os.listdir("/etc/ssh/"):
+    if f.endswith(".pub"):
+        pub_path = os.path.join("/etc/ssh/", f)
+        priv_path = pub_path.rsplit(".pub", 1)[0]
+        try:
+            with open(pub_path, "r") as file:
+                parts = file.read().split()
+                if len(parts) < 2: continue
+                key_bytes = base64.b64decode(parts[1])
+                alg_len = struct.unpack(">I", key_bytes[:4])[0]
+                e_len = struct.unpack(">I", key_bytes[4+alg_len:8+alg_len])[0]
+                n_len = struct.unpack(">I", key_bytes[8+alg_len+e_len:12+alg_len+e_len])[0]
+                n_bytes = key_bytes[12+alg_len+e_len : 12+alg_len+e_len+n_len]
+                bits = (len(n_bytes) - (1 if n_bytes[0] == 0 else 0)) * 8
+                
+                if bits == 1024:
+                    print(f"Usuwam klucz publiczny: {pub_path}")
+                    os.remove(pub_path)
+                    if os.path.exists(priv_path):
+                        print(f"Usuwam klucz prywatny:  {priv_path}")
+                        os.remove(priv_path)
+        except Exception:
+            pass
+'
+
+
 
 
 
