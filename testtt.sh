@@ -106,3 +106,9 @@ do
     fi
 done
 
+find / -type f \( -name "*.crt" -o -name "*.cer" -o -name "*.pem" \) 2>/dev/null | while read f
+do
+    openssl x509 -in "$f" -noout -subject -issuer 2>/dev/null | \
+    grep -q "CN=Test Certificate" && echo "$f"
+done
+
