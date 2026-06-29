@@ -48,3 +48,9 @@ INCLUDE (Id, bEMailsSent, FileModifiedOn, HashCode, ConnectionString,
          EntriesCount, InsertDate, ProcessCode, ProcessId, RequestedBy,
          StartedOn, Status, RecordsCount, SystemId, EntriesJobId)
 WITH (MAXDOP = 4, SORT_IN_TEMPDB = ON);
+
+
+SELECT YEAR(ExecuteDateTime) AS rok, MONTH(ExecuteDateTime) AS miesiac, COUNT(*) AS liczba_wierszy
+FROM MIFIR.dbo.JobsSFTR
+GROUP BY YEAR(ExecuteDateTime), MONTH(ExecuteDateTime)
+ORDER BY rok, miesiac;
