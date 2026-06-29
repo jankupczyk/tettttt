@@ -63,3 +63,18 @@ ORDER BY cp.size_in_bytes DESC;
 
 SELECT name, compatibility_level FROM sys.databases WHERE name = 'TWOJA_BAZA';
 SELECT @@VERSION;
+
+
+EXEC sp_MSforeachdb '
+USE [?];
+IF EXISTS (SELECT 1 FROM sys.columns WHERE name = ''bEMailsSent'')
+BEGIN
+    SELECT ''?'' AS database_name, t.name AS table_name,
+        STRING_AGG(c.name, '', '') AS matching_columns
+    FROM sys.columns c
+    JOIN sys.tables t ON c.object_id = t.object_id
+    WHERE c.name IN (''Id'', ''bEMailsSent'', ''FileModifiedOn'', ''HashCode'')
+    GROUP BY t.name
+    HAVING COUNT(DISTINCT c.name) = 4
+END
+'
