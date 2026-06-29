@@ -38,3 +38,13 @@ CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st
 CROSS APPLY sys.dm_exec_query_plan(qs.plan_handle) qp
 WHERE st.text LIKE '%bEMailsSent%'
 ORDER BY qs.total_logical_reads DESC;
+
+
+USE MIFIR;
+CREATE NONCLUSTERED INDEX IX_JobsSFTR_JobType_ExecuteDateTime
+ON dbo.JobsSFTR (JobType, ExecuteDateTime)
+INCLUDE (Id, bEMailsSent, FileModifiedOn, HashCode, ConnectionString,
+         ErrorDescription, FileName, FinishedOn, FormatId, LinesCount,
+         EntriesCount, InsertDate, ProcessCode, ProcessId, RequestedBy,
+         StartedOn, Status, RecordsCount, SystemId, EntriesJobId)
+WITH (MAXDOP = 4, SORT_IN_TEMPDB = ON);
