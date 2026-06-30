@@ -98,17 +98,12 @@ print "OK\n";
 exit 0;
 
 
-find / -type f \( -name "*.pem" -o -name "*.crt" -o -name "*.cer" \) 2>/dev/null | while read f
-do
-    openssl x509 -in "$f" -noout -text 2>/dev/null | grep -qi "emailAddress=.*twoj@email.pl"
-    if [ $? -eq 0 ]; then
-        echo "Znaleziono w: $f"
-    fi
-done
-
-find / -type f \( -name "*.crt" -o -name "*.cer" -o -name "*.pem" \) 2>/dev/null | while read f
-do
-    openssl x509 -in "$f" -noout -subject -issuer 2>/dev/null | \
-    grep -q "CN=Test Certificate" && echo "$f"
-done
-
+<security-constraint>
+    <web-resource-collection>
+        <web-resource-name>Wymuszenie HTTPS</web-resource-name>
+        <url-pattern>/*</url-pattern>
+    </web-resource-collection>
+    <user-data-constraint>
+        <transport-guarantee>CONFIDENTIAL</transport-guarantee>
+    </user-data-constraint>
+</security-constraint>
