@@ -98,12 +98,7 @@ print "OK\n";
 exit 0;
 
 
-<security-constraint>
-    <web-resource-collection>
-        <web-resource-name>Wymuszenie HTTPS</web-resource-name>
-        <url-pattern>/*</url-pattern>
-    </web-resource-collection>
-    <user-data-constraint>
-        <transport-guarantee>CONFIDENTIAL</transport-guarantee>
-    </user-data-constraint>
-</security-constraint>
+Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Office\16.0\Access Connectivity Engine" -ErrorAction SilentlyContinue
+
+
+Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*Access*" -or $_.Name -like "*Database Engine*" }
