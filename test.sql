@@ -54,3 +54,6 @@ SELECT YEAR(ExecuteDateTime) AS rok, MONTH(ExecuteDateTime) AS miesiac, COUNT(*)
 FROM MIFIR.dbo.JobsSFTR
 GROUP BY YEAR(ExecuteDateTime), MONTH(ExecuteDateTime)
 ORDER BY rok, miesiac;
+
+
+find * -name "*.class" -exec strings {} \; | grep "getResource" | grep -v "^/"
