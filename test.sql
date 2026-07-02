@@ -56,4 +56,6 @@ GROUP BY YEAR(ExecuteDateTime), MONTH(ExecuteDateTime)
 ORDER BY rok, miesiac;
 
 
-find * -name "*.class" -exec strings {} \; | grep "getResource" | grep -v "^/"
+find  -name "*.class" | xargs javap -c 2>/dev/null | grep -B2 "getResource" | grep "String\|ldc\|getResource"
+
+find  -name "*.class" -exec strings {} \; | grep -E "^WEB-INF|^META-INF|^resources|^config" | sort -u
