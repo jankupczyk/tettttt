@@ -10,13 +10,15 @@ use JSON;
 use IPC::Open2;
 use Tie::IxHash;
 
-my $tmadmin = '/app/tuxedo22/tuxedo22.1.0.0.0/bin/tmadmin';
-my $domain  = shift @ARGV || '';
+my $dmadmin = '/app/tuxedo22/tuxedo22.1.0.0.0/bin/dmadmin';
+my $domain  = shift @ARGV || 'slink';   # nazwa lokalnej domeny, mozna podac jako arg
 
-my $pid = open2(my $out, my $in, "$tmadmin -r 2>/dev/null")
-    or die "ERROR:: Cannot execute tmadmin: $!\n";
+# dmadmin uruchamiany bez parametrow wchodzi w tryb administracyjny (bez -r jak tmadmin)
+my $pid = open2(my $out, my $in, "$dmadmin 2>/dev/null")
+    or die "ERROR:: Cannot execute dmadmin: $!\n";
 
 print $in "pd -d $domain\n";
+print $in "quit\n";
 close $in;
 
 my %status;   # domainid => 1 (connected) / 0 (disconnected)
