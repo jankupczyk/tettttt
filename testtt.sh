@@ -1,104 +1,63 @@
 #!/usr/bin/perl
+$ENV{'TUXDIR'} = '/app/tuxedo';
+$ENV{'TUXCONFIG'} = '/app/wpr/tuxedo/tuxconfig';
+$ENV{'PATH'} = "$ENV{'TUXDIR'}/bin:$ENV{'PATH'}";
+$ENV{'LD_LIBRARY_PATH'} = "$ENV{'TUXDIR'}/lib:$ENV{'LD_LIBRARY_PATH'}";
 
-use strict;
 use warnings;
-use Fcntl qw(SEEK_SET);
+use strict;
+use JSON;
+use IPC::Open2;
+use Tie::IxHash;
 
-my $LOGDIR = "/home/app/logs";
-my $STATE  = "/var/tmp/log_monitor.state";
+my $tmadmin = '/app/tuxedo22/tuxedo22.1.0.0.0/bin/tmadmin';
+my $domain  = shift @ARGV || '';
 
-my @patterns = (
-    qr/Program error/,
-    qr/A character variable has referenced subscripts that/
-);
+my $pid = open2(my $out, my $in, "$tmadmin -r 2>/dev/null")
+    or die "ERROR:: Cannot execute tmadmin: $!\n";
 
-my %offsets;
+print $in "pd -d $domain\n";
+close $in;
 
-if (-f $STATE) {
-    open(my $sfh, "<", $STATE) or die "Cannot open state file";
+my %status;   # domainid => 1 (connected) / 0 (disconnected)
+my $mode = '';
 
-    while (<$sfh>) {
-        chomp;
-        my ($file,$offset) = split(/\|/, $_, 2);
-        $offsets{$file} = $offset;
+while (my $line = <$out>) {
+    chomp $line;
+    $line =~ s/^\s+|\s+$//g;
+    next if $line eq '';
+
+    if ($line =~ /^Connected domains:/i) {
+        $mode = 'connected';
+        next;
     }
+    if ($line =~ /^Disconnected domains/i) {
+        $mode = 'disconnected';
+        next;
+    }
+    next unless $line =~ /^Domainid:\s*(\S+)/i;
 
-    close($sfh);
+    my $domid = $1;
+    if ($mode eq 'connected') {
+        $status{$domid} = 1;
+    } elsif ($mode eq 'disconnected') {
+        $status{$domid} = 0;
+    }
+}
+close $out;
+waitpid($pid, 0);
+
+my @data;
+foreach my $domid (sort keys %status) {
+    tie my %ordered, 'Tie::IxHash';
+    %ordered = (
+        '{#DOMAINID}' => $domid,
+        'DOMAINID'    => $domid,
+        'STATUS'      => $status{$domid},
+    );
+    push @data, \%ordered;
 }
 
-my $found = 0;
-my @alerts;
+my %json_out = ( data => \@data );
 
-opendir(my $dh, $LOGDIR) or die "Cannot open $LOGDIR";
-
-while (my $file = readdir($dh)) {
-
-    next if $file =~ /^\./;
-
-    my $full = "$LOGDIR/$file";
-
-    next unless -f $full;
-
-    my $size = -s $full;
-
-    my $offset = $offsets{$full} || 0;
-
-    if ($offset > $size) {
-        $offset = 0;
-    }
-
-    open(my $fh, "<", $full) or next;
-
-    seek($fh, $offset, SEEK_SET);
-
-    while (my $line = <$fh>) {
-
-        foreach my $pattern (@patterns) {
-
-            if ($line =~ $pattern) {
-
-                chomp $line;
-
-                push @alerts,
-                     "$full => $line";
-
-                $found = 1;
-            }
-        }
-    }
-
-    $offsets{$full} = tell($fh);
-
-    close($fh);
-}
-
-closedir($dh);
-
-open(my $sfh, ">", $STATE)
-    or die "Cannot write state file";
-
-foreach my $file (sort keys %offsets) {
-    print $sfh "$file|$offsets{$file}\n";
-}
-
-close($sfh);
-
-if ($found) {
-
-    print "ERROR FOUND\n";
-
-    foreach (@alerts) {
-        print "$_\n";
-    }
-
-    exit 1;
-}
-
-print "OK\n";
-exit 0;
-
-
-Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Office\16.0\Access Connectivity Engine" -ErrorAction SilentlyContinue
-
-
-Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "*Access*" -or $_.Name -like "*Database Engine*" }
+print to_json(\%json_out, { utf8 => 1, pretty => 0 }) . "\n";
