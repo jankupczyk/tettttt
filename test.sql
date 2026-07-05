@@ -56,6 +56,5 @@ GROUP BY YEAR(ExecuteDateTime), MONTH(ExecuteDateTime)
 ORDER BY rok, miesiac;
 
 
-find  -name "*.class" | xargs javap -c 2>/dev/null | grep -B2 "getResource" | grep "String\|ldc\|getResource"
+Communication with remote Tuxedo domain "{{ITEM.NAME}.regsub("Domain status for (.*)", "\1")}" has been lost. The domain gateway is unable to establish or maintain a connection with the remote domain.
 
-find  -name "*.class" -exec strings {} \; | grep -E "^WEB-INF|^META-INF|^resources|^config" | sort -u
