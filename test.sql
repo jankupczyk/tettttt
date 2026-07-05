@@ -56,5 +56,31 @@ GROUP BY YEAR(ExecuteDateTime), MONTH(ExecuteDateTime)
 ORDER BY rok, miesiac;
 
 
-Communication with remote Tuxedo domain "{{ITEM.NAME}.regsub("Domain status for (.*)", "\1")}" has been lost. The domain gateway is unable to establish or maintain a connection with the remote domain.
+New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "LocalAccountTokenFilterPolicy" -Value 0 -PropertyType DWORD -Force
+
+New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Force
+New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoAutorun" -Value 1 -PropertyType DWORD -Force
+
+New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "DontDisplayLastUserName" -Value 1 -PropertyType DWORD -Force
+
+New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "LogonType" -Value 0 -PropertyType DWORD -Force
+
+New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Force
+New-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "NoInternetOpenWith" -Value 1 -PropertyType DWORD -Force
+
+Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer"
+
+
+
+
+
+
+
+
+
+
+
+
 
