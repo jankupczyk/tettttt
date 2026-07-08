@@ -1,10 +1,13 @@
-#status of turn off the internet files
-New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Force
-New-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "NoInternetOpenWith" -Value 1 -PropertyType DWORD -Force
+SELECT 
+    OBJECT_NAME(s.object_id) AS TableName,
+    i.name AS IndexName,
+    s.user_seeks, s.user_scans, s.user_lookups, s.last_user_seek
+FROM sys.dm_db_index_usage_stats s
+JOIN sys.indexes i ON s.object_id = i.object_id AND s.index_id = i.index_id
+WHERE s.object_id = OBJECT_ID('dbo.JobsSFTR');
 
-Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "NoInternetOpenWith"
 
-
-#sign in last
-New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "DisableAutomaticRestartSignOn" -Value 1 -PropertyType DWORD -Force
-Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "DisableAutomaticRestartSignOn"
+SELECT 
+    i.name, ips.avg_fragmentation_in_percent, ips.page_count
+FROM sys.dm_db_index_physical_stats(DB_ID(), OBJECT_ID('dbo.JobsSFTR'), NULL, NULL, 'LIMITED') ips
+JOIN sys.indexes i ON ips.object_id = i.object_id AND ips.index_id = i.index_id;
