@@ -1,10 +1,7 @@
-#!/bin/bash
+sed -i -E 's/,?rsa-sha2-(512|256)(-cert-v01@openssh\.com)?//g; s/,?ssh-rsa(-cert-v01@openssh\.com)?//g' sshd_config
 
-DATA=$(date +%Y%m%d)
 
-for f in *.unl; do
-    nazwa="${f%.unl}"
-    if zip "${nazwa}_${DATA}.zip" "$f"; then
-        rm "$f"
-    fi
-done
+grep -E "^HostKeyAlgorithms|^PubkeyAcceptedKeyTypes" sshd_config
+
+
+/usr/sbin/sshd -t -f /etc/ssh/sshd_config
