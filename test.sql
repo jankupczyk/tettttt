@@ -1,14 +1,27 @@
-sed -i -E 's/,?rsa-sha2-(512|256)(-cert-v01@openssh\.com)?//g; s/,?ssh-rsa(-cert-v01@openssh\.com)?//g' sshd_config
+#!/usr/bin/perl
+use strict;
+use warnings;
 
 
-grep -E "^HostKeyAlgorithms|^PubkeyAcceptedKeyTypes" sshd_config
 
+open my $onstat, "-|", "/onstat -u"
+    or die "ERROR:: Cannot execute onstat: $!\n";
 
-/usr/sbin/sshd -t -f /etc/ssh/sshd_config
+my ($active, $total);
 
-sed 's/,\{0,1\}rsa-sha2-512-cert-v01@openssh\.com//g;
-s/,\{0,1\}rsa-sha2-256-cert-v01@openssh\.com//g;
-s/,\{0,1\}rsa-sha2-512//g;
-s/,\{0,1\}rsa-sha2-256//g;
-s/,\{0,1\}ssh-rsa-cert-v01@openssh\.com//g;
-s/,\{0,1\}ssh-rsa//g' sshd_config > sshd_config.new
+while (my $line = <$onstat>) {
+    if ($line =~ /(\d+)\s+active,\s+(\d+)\s+total,\s+(\d+)\s+maximum concurrent/) {
+        $active = $1;
+        $total  = $2;
+        last;
+    }
+}
+close $onstat;
+
+unless (defined $active && defined $total && $total > 0) {
+    die "ERROR:: Cannot parse onstat -u output\n";
+}
+
+my $userthread_pool_utilization = ($active / $total) * 100;
+
+printf "%.2f\n", $userthread_pool_utilization;
