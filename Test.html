@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>i_rach_konv — wykorzystanie indeksów</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Consolas', ui-monospace, Menlo, monospace;
+    background: #0F1416;
+    color: #DCE6E4;
+    margin: 0;
+    padding: 32px 24px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px 0; color: #F2F5F4; }
+  .sub { font-size: 12px; color: #7C8C89; margin-bottom: 24px; }
+
+  .dropzone {
+    border: 1px dashed #2A3838;
+    border-radius: 8px;
+    padding: 28px;
+    text-align: center;
+    background: #12191A;
+    cursor: pointer;
+    transition: border-color .15s;
+    margin-bottom: 20px;
+  }
+  .dropzone:hover, .dropzone.drag { border-color: #6FA89A; }
+  .dropzone input { display: none; }
+  .dropzone .label { color: #8FE0CC; font-size: 13px; }
+  .dropzone .hint { color: #5C6E6B; font-size: 11px; margin-top: 6px; }
+
+  .controls {
+    display: none;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .controls.show { display: flex; }
+  select, button {
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid #263030;
+    background: #1B2B29;
+    color: #8FE0CC;
+    cursor: pointer;
+  }
+  select { min-width: 140px; }
+  button:hover, select:hover { border-color: #6FA89A; }
+
+  .chart-box {
+    display: none;
+    border: 1px solid #1E2727;
+    border-radius: 6px;
+    padding: 16px;
+    background: #12191A;
+    margin-bottom: 20px;
+  }
+  .chart-box.show { display: block; }
+  canvas { max-height: 420px; }
+
+  .status { font-size: 12px; color: #E8A33D; margin-bottom: 12px; }
+  .meta { font-size: 11px; color: #5C6E6B; margin-top: 16px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="font-size:12px;color:#6FA89A;letter-spacing:1px;">slink · sysptprof monitor</div>
+  <h1>i_rach_konwersja — wykorzystanie indeksów</h1>
+  <div class="sub">Wczytaj plik .out lokalnie — parsowanie odbywa się w przeglądarce, nic nie jest wysyłane nigdzie.</div>
+
+  <div class="dropzone" id="dropzone">
+    <input type="file" id="fileInput" accept=".out,.txt,.log">
+    <div class="label">Kliknij, aby wybrać plik (lub przeciągnij i upuść)</div>
+    <div class="hint">np. i_rach_konv_i.out</div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="controls" id="controls">
+    <select id="metricSelect"></select>
+    <button id="downloadCsv">Pobierz CSV</button>
+  </div>
+
+  <div class="chart-box" id="chartBox">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="meta" id="metaInfo"></div>
+</div>
+
+<script>
+const METRIC_NAMES = ["bufreads","bufwrites","lockreqs","lockwts","isreads","iswrites","isrewrites","isdeletes","seqscans"];
+const TIMESTAMP_RE = /^\w{3}\s+\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\w+\s+\d{4}\s*$/;
+const DATA_RE = /^(\d+)\s+(\S+)\s+(\S+)\s+((?:-?\d+\s*)+)$/;
+
+let parsedRecords = []; // {timestamp, partnum, tabname, index, metric, value}
+let chartInstance = null;
+
+function parseText(text) {
+  const lines = text.split(/\r?\n/);
+  let currentTs = null;
+  const records = [];
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (TIMESTAMP_RE.test(line)) {
+      currentTs = line;
+      continue;
+    }
+    const m = line.match(DATA_RE);
+    if (m && currentTs) {
+      const [, partnum, tabname, indexname, valuesStr] = m;
+      const values = valuesStr.trim().split(/\s+/).map(Number);
+      const names = METRIC_NAMES.slice(0, values.length);
+      names.forEach((name, i) => {
+        records.push({
+          timestamp: currentTs,
+          partnum, tabname,
+          index: indexname,
+          metric: name,
+          value: values[i],
+        });
+      });
+    }
+  }
+  return records;
+}
+
+function uniqueInOrder(arr) {
+  const seen = [];
+  for (const v of arr) if (!seen.includes(v)) seen.push(v);
+  return seen;
+}
+
+function buildWideTable(records, metric) {
+  const filtered = records.filter(r => r.metric === metric);
+  const timestamps = uniqueInOrder(filtered.map(r => r.timestamp));
+  const indexes = uniqueInOrder(filtered.map(r => r.index)).sort();
+  const lookup = {};
+  filtered.forEach(r => { lookup[r.timestamp + '|' + r.index] = r.value; });
+  const rows = timestamps.map(ts => {
+    const row = { timestamp: ts };
+    indexes.forEach(idx => { row[idx] = lookup[ts + '|' + idx] ?? 0; });
+    return row;
+  });
+  return { timestamps, indexes, rows };
+}
+
+const palette = ["#5EC8D8", "#E8A33D", "#8D7BE0", "#E85D5D", "#6FCF97", "#F2994A", "#BB6BD9", "#56CCF2"];
+
+function renderChart(records, metric) {
+  const { timestamps, indexes, rows } = buildWideTable(records, metric);
+  const datasets = indexes.map((idx, i) => ({
+    label: idx,
+    data: rows.map(r => r[idx]),
+    borderColor: palette[i % palette.length],
+    backgroundColor: palette[i % palette.length],
+    tension: 0.25,
+    pointRadius: 3,
+  }));
+
+  if (chartInstance) chartInstance.destroy();
+  const ctx = document.getElementById('chart').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels: timestamps, datasets },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: '#DCE6E4', font: { family: 'Consolas', size: 11 } } },
+        title: { display: true, text: metric + ' w czasie — per indeks', color: '#F2F5F4', font: { size: 14 } },
+      },
+      scales: {
+        x: { ticks: { color: '#5C6E6B', font: { size: 10 }, maxRotation: 45, minRotation: 45 }, grid: { color: '#1E2727' } },
+        y: { ticks: { color: '#5C6E6B', font: { size: 10 } }, grid: { color: '#1E2727' } },
+      },
+    },
+  });
+}
+
+function downloadCsv(records, metric) {
+  const { timestamps, indexes, rows } = buildWideTable(records, metric);
+  const header = ['timestamp', ...indexes].join(',');
+  const lines = rows.map(r => [r.timestamp, ...indexes.map(idx => r[idx])].join(','));
+  const csv = [header, ...lines].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'index_usage_' + metric + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function handleFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    parsedRecords = parseText(e.target.result);
+    if (parsedRecords.length === 0) {
+      document.getElementById('status').textContent =
+        'Nie znaleziono żadnych danych — sprawdź format pliku (linie z datą + linie z danymi indeksów).';
+      return;
+    }
+    document.getElementById('status').textContent = '';
+
+    const metrics = uniqueInOrder(parsedRecords.map(r => r.metric));
+    const select = document.getElementById('metricSelect');
+    select.innerHTML = metrics.map(m => `<option value="${m}">${m}</option>`).join('');
+    select.value = metrics.includes('isreads') ? 'isreads' : metrics[0];
+
+    document.getElementById('controls').classList.add('show');
+    document.getElementById('chartBox').classList.add('show');
+    renderChart(parsedRecords, select.value);
+
+    const nIndexes = uniqueInOrder(parsedRecords.map(r => r.index)).length;
+    const nTimestamps = uniqueInOrder(parsedRecords.map(r => r.timestamp)).length;
+    document.getElementById('metaInfo').textContent =
+      `Wczytano ${nTimestamps} znaczników czasu, ${nIndexes} indeksów, ${metrics.length} metryk (${file.name}).`;
+  };
+  reader.onerror = () => {
+    document.getElementById('status').textContent = 'Błąd odczytu pliku.';
+  };
+  reader.readAsText(file);
+}
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+document.getElementById('metricSelect').addEventListener('change', (e) => {
+  renderChart(parsedRecords, e.target.value);
+});
+document.getElementById('downloadCsv').addEventListener('click', () => {
+  const metric = document.getElementById('metricSelect').value;
+  downloadCsv(parsedRecords, metric);
+});
+</script>
+</body>
+</html>
