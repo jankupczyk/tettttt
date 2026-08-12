@@ -1,0 +1,1 @@
+Get-EventLog -LogName Application -After (Get-Date).AddDays(-1) | Where-Object {$_.Source -like "*MQ*"} | Format-Table TimeGenerated, EntryType, Source, Message -AutoSize -Wrap
