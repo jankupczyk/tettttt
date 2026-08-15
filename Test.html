@@ -1,255 +1,206 @@
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-<meta charset="UTF-8">
-<title>i_rach_konv — wykorzystanie indeksów</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<style>
-  * { box-sizing: border-box; }
-  body {
-    font-family: 'Consolas', ui-monospace, Menlo, monospace;
-    background: #0F1416;
-    color: #DCE6E4;
-    margin: 0;
-    padding: 32px 24px;
-  }
-  .wrap { max-width: 980px; margin: 0 auto; }
-  h1 { font-size: 20px; margin: 0 0 4px 0; color: #F2F5F4; }
-  .sub { font-size: 12px; color: #7C8C89; margin-bottom: 24px; }
+#!/bin/ksh
 
-  .dropzone {
-    border: 1px dashed #2A3838;
-    border-radius: 8px;
-    padding: 28px;
-    text-align: center;
-    background: #12191A;
-    cursor: pointer;
-    transition: border-color .15s;
-    margin-bottom: 20px;
-  }
-  .dropzone:hover, .dropzone.drag { border-color: #6FA89A; }
-  .dropzone input { display: none; }
-  .dropzone .label { color: #8FE0CC; font-size: 13px; }
-  .dropzone .hint { color: #5C6E6B; font-size: 11px; margin-top: 6px; }
 
-  .controls {
-    display: none;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
-  }
-  .controls.show { display: flex; }
-  select, button {
-    font-family: inherit;
-    font-size: 12px;
-    padding: 6px 12px;
-    border-radius: 4px;
-    border: 1px solid #263030;
-    background: #1B2B29;
-    color: #8FE0CC;
-    cursor: pointer;
-  }
-  select { min-width: 140px; }
-  button:hover, select:hover { border-color: #6FA89A; }
+. /u/slink/kshenv
 
-  .chart-box {
-    display: none;
-    border: 1px solid #1E2727;
-    border-radius: 6px;
-    padding: 16px;
-    background: #12191A;
-    margin-bottom: 20px;
-  }
-  .chart-box.show { display: block; }
-  canvas { max-height: 420px; }
+SL_DIR=/path/to/slink
+MNT_POINT="/nas_ext_rap"
+OUT_DIR="$MNT_POINT/raporty"
+TMP_DIR="$SL_DIR/tmp"
 
-  .status { font-size: 12px; color: #E8A33D; margin-bottom: 12px; }
-  .meta { font-size: 11px; color: #5C6E6B; margin-top: 16px; line-height: 1.6; }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div style="font-size:12px;color:#6FA89A;letter-spacing:1px;">slink · sysptprof monitor</div>
-  <h1>i_rach_konwersja — wykorzystanie indeksów</h1>
-  <div class="sub">Wczytaj plik .out lokalnie — parsowanie odbywa się w przeglądarce, nic nie jest wysyłane nigdzie.</div>
 
-  <div class="dropzone" id="dropzone">
-    <input type="file" id="fileInput" accept=".out,.txt,.log">
-    <div class="label">Kliknij, aby wybrać plik (lub przeciągnij i upuść)</div>
-    <div class="hint">np. i_rach_konv_i.out</div>
-  </div>
+LAST_DAY_PREV=$(perl -e '
+  use POSIX qw(strftime mktime);
+  my @t = localtime(time());
+  my $first_this = mktime(0,0,0,1,$t[4],$t[5]);
+  print strftime("%d-%m-%Y", localtime($first_this - 86400));
+')
+FIRST_DAY_PREV=$(perl -e '
+  use POSIX qw(strftime mktime);
+  my @t = localtime(time());
+  my $first_this = mktime(0,0,0,1,$t[4],$t[5]);
+  print strftime("01-%m-%Y", localtime($first_this - 86400));
+')
+YEARMONTH=$(perl -e '
+  use POSIX qw(strftime mktime);
+  my @t = localtime(time());
+  my $first_this = mktime(0,0,0,1,$t[4],$t[5]);
+  print strftime("%Y_%m", localtime($first_this - 86400));
+')
 
-  <div class="status" id="status"></div>
+KRAJOWE_TXT="$TMP_DIR/krajowe_${YEARMONTH}.txt"
+EOG_TXT="$TMP_DIR/eog_${YEARMONTH}.txt"
+POZA_EOG_TXT="$TMP_DIR/poza_eog_${YEARMONTH}.txt"
+XLS_OUT="$OUT_DIR/mp_raport_odstepstwa_${YEARMONTH}.xls"
 
-  <div class="controls" id="controls">
-    <select id="metricSelect"></select>
-    <button id="downloadCsv">Pobierz CSV</button>
-  </div>
+echo "$(date '+%Y-%m-%d %H:%M:%S') START MP RAPORT ODSTEPSTWA za okres ${FIRST_DAY_PREV} - ${LAST_DAY_PREV}"
 
-  <div class="chart-box" id="chartBox">
-    <canvas id="chart"></canvas>
-  </div>
+dbaccess slink <<EOSQL
+SET ISOLATION TO DIRTY READ;
 
-  <div class="meta" id="metaInfo"></div>
-</div>
+UNLOAD TO $KRAJOWE_TXT
+SELECT 'KRAJOWE', EXTEND(data_rap, YEAR TO MONTH),
+CASE
+  WHEN szyfr = 'E' THEN 'EBICS'
+  WHEN szyfr = 'F' THEN 'FILEACT'
+  WHEN szyfr = 'H' THEN 'Host2Host'
+  ELSE 'NIEZNANY'
+END,
+CAST(ROUND(COUNT(*),0) AS VARCHAR(10)), SUM(kwota_sys)
+FROM mp_transakcje, mp_pliki
+WHERE mp_transakcje.id_mp_pliki = mp_pliki.id_mp_pliki
+AND data_rap BETWEEN '$FIRST_DAY_PREV' AND '$LAST_DAY_PREV'
+AND szyfr IN ('E', 'F', 'H')
+AND status_platniczy IN ('P', 'W')
+AND system_real != 'SWIFT'
+GROUP BY 1,2,3
+ORDER BY 3 DESC
+;
 
-<script>
-const METRIC_NAMES = ["bufreads","bufwrites","lockreqs","lockwts","isreads","iswrites","isrewrites","isdeletes","seqscans"];
-const TIMESTAMP_RE = /^\w{3}\s+\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\w+\s+\d{4}\s*$/;
-const DATA_RE = /^(\d+)\s+(\S+)\s+(\S+)\s+((?:-?\d+\s*)+)$/;
+UNLOAD TO $EOG_TXT
+SELECT 'EOG', EXTEND(data_rap, YEAR TO MONTH),
+CASE
+  WHEN szyfr = 'E' THEN 'EBICS'
+  WHEN szyfr = 'F' THEN 'FILEACT'
+  WHEN szyfr = 'H' THEN 'Host2Host'
+  ELSE 'NIEZNANY'
+END,
+CAST(ROUND(COUNT(*),0) AS VARCHAR(10)), SUM(kwota_sys)
+FROM mp_transakcje, mp_pliki, kraje
+WHERE mp_transakcje.id_mp_pliki = mp_pliki.id_mp_pliki
+AND data_rap BETWEEN '$FIRST_DAY_PREV' AND '$LAST_DAY_PREV'
+AND szyfr IN ('E', 'F', 'H')
+AND mp_transakcje.status_platniczy IN ('P', 'W')
+AND system_real = 'SWIFT'
+AND bank_adr4 = kraje.kod_kraju
+AND kraje.uup = 'T'
+GROUP BY 1,2,3
+ORDER BY 3 DESC
+;
 
-let parsedRecords = []; // {timestamp, partnum, tabname, index, metric, value}
-let chartInstance = null;
+UNLOAD TO $POZA_EOG_TXT
+SELECT 'POZA_EOG', EXTEND(data_rap, YEAR TO MONTH),
+CASE
+  WHEN szyfr = 'E' THEN 'EBICS'
+  WHEN szyfr = 'F' THEN 'FILEACT'
+  WHEN szyfr = 'H' THEN 'Host2Host'
+  ELSE 'NIEZNANY'
+END,
+CAST(ROUND(COUNT(*),0) AS VARCHAR(10)), SUM(kwota_sys)
+FROM mp_transakcje, mp_pliki, kraje
+WHERE mp_transakcje.id_mp_pliki = mp_pliki.id_mp_pliki
+AND data_rap BETWEEN '$FIRST_DAY_PREV' AND '$LAST_DAY_PREV'
+AND szyfr IN ('E', 'F', 'H')
+AND mp_transakcje.status_platniczy IN ('P', 'W')
+AND system_real = 'SWIFT'
+AND bank_adr4 = kraje.kod_kraju
+AND kraje.uup = 'N'
+GROUP BY 1,2,3
+ORDER BY 3 DESC
+;
+EOSQL
 
-function parseText(text) {
-  const lines = text.split(/\r?\n/);
-  let currentTs = null;
-  const records = [];
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    if (TIMESTAMP_RE.test(line)) {
-      currentTs = line;
-      continue;
+if [ $? -ne 0 ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') ERROR:: dbaccess zakonczyl sie bledem"
+    exit 1
+fi
+
+for f in "$KRAJOWE_TXT" "$EOG_TXT" "$POZA_EOG_TXT"; do
+    if [ ! -f "$f" ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') ERROR:: Brak pliku wynikowego: $f"
+        exit 1
+    fi
+done
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') INFO:: Dane pobrane, generuje XLS..."
+
+perl -- "$YEARMONTH" "$KRAJOWE_TXT" "$EOG_TXT" "$POZA_EOG_TXT" "$XLS_OUT" <<'EOPERL'
+use strict;
+use warnings;
+
+my ($yearmonth, $krajowe, $eog, $poza_eog, $out_path) = @ARGV;
+
+my @sections = (
+    ["KRAJOWE",  $krajowe],
+    ["EOG",      $eog],
+    ["POZA_EOG", $poza_eog],
+);
+my @channels = ("Host2Host", "FILEACT", "EBICS");
+
+sub parse_file {
+    my ($path) = @_;
+    my %data;
+    open(my $fh, "<", $path) or die "Cannot open $path: $!\n";
+    while (my $line = <$fh>) {
+        chomp $line;
+        my @p = split(/\|/, $line);
+        next if scalar(@p) < 5;
+        my ($channel, $count, $amount) = ($p[2], $p[3], $p[4]);
+        s/^\s+|\s+$//g for ($channel, $count, $amount);
+        $amount =~ s/,/./;
+        $data{$channel} = [$count, $amount];
     }
-    const m = line.match(DATA_RE);
-    if (m && currentTs) {
-      const [, partnum, tabname, indexname, valuesStr] = m;
-      const values = valuesStr.trim().split(/\s+/).map(Number);
-      const names = METRIC_NAMES.slice(0, values.length);
-      names.forEach((name, i) => {
-        records.push({
-          timestamp: currentTs,
-          partnum, tabname,
-          index: indexname,
-          metric: name,
-          value: values[i],
-        });
-      });
+    close $fh;
+    return \%data;
+}
+
+open(my $out, ">", $out_path) or die "Cannot write $out_path: $!\n";
+
+print $out <<'HEADER';
+<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+<Styles>
+ <Style ss:ID="hdr"><Font ss:Bold="1"/></Style>
+ <Style ss:ID="section"><Font ss:Bold="1"/><Alignment ss:Horizontal="Center"/></Style>
+ <Style ss:ID="num"><NumberFormat ss:Format="#,##0"/></Style>
+ <Style ss:ID="amt"><NumberFormat ss:Format="#,##0.00 &quot;zl&quot;"/></Style>
+</Styles>
+<Worksheet ss:Name="Raport">
+<Table>
+ <Column ss:Width="120"/>
+ <Column ss:Width="110"/>
+ <Column ss:Width="160"/>
+ <Row>
+  <Cell ss:StyleID="hdr"><Data ss:Type="String">Kanal dystrybucji</Data></Cell>
+  <Cell ss:StyleID="hdr"><Data ss:Type="String">Ilosc transakcji</Data></Cell>
+  <Cell ss:StyleID="hdr"><Data ss:Type="String">Wartosc transakcji w PLN</Data></Cell>
+ </Row>
+HEADER
+
+for my $section (@sections) {
+    my ($name, $path) = @$section;
+    print $out " <Row>\n";
+    print $out "  <Cell ss:StyleID=\"section\" ss:MergeAcross=\"2\"><Data ss:Type=\"String\">$name</Data></Cell>\n";
+    print $out " </Row>\n";
+
+    my $data = parse_file($path);
+    for my $ch (@channels) {
+        my ($count, $amount) = $data->{$ch} ? @{$data->{$ch}} : (0, 0);
+        print $out " <Row>\n";
+        print $out "  <Cell><Data ss:Type=\"String\">$ch</Data></Cell>\n";
+        print $out "  <Cell ss:StyleID=\"num\"><Data ss:Type=\"Number\">$count</Data></Cell>\n";
+        print $out "  <Cell ss:StyleID=\"amt\"><Data ss:Type=\"Number\">$amount</Data></Cell>\n";
+        print $out " </Row>\n";
     }
-  }
-  return records;
 }
 
-function uniqueInOrder(arr) {
-  const seen = [];
-  for (const v of arr) if (!seen.includes(v)) seen.push(v);
-  return seen;
-}
+print $out <<'FOOTER';
+</Table>
+</Worksheet>
+</Workbook>
+FOOTER
 
-function buildWideTable(records, metric) {
-  const filtered = records.filter(r => r.metric === metric);
-  const timestamps = uniqueInOrder(filtered.map(r => r.timestamp));
-  const indexes = uniqueInOrder(filtered.map(r => r.index)).sort();
-  const lookup = {};
-  filtered.forEach(r => { lookup[r.timestamp + '|' + r.index] = r.value; });
-  const rows = timestamps.map(ts => {
-    const row = { timestamp: ts };
-    indexes.forEach(idx => { row[idx] = lookup[ts + '|' + idx] ?? 0; });
-    return row;
-  });
-  return { timestamps, indexes, rows };
-}
+close $out;
+print "OK: zapisano $out_path\n";
+EOPERL
 
-const palette = ["#5EC8D8", "#E8A33D", "#8D7BE0", "#E85D5D", "#6FCF97", "#F2994A", "#BB6BD9", "#56CCF2"];
+if [ ! -f "$XLS_OUT" ]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') ERROR:: Nie udalo sie wygenerowac $XLS_OUT"
+    exit 1
+fi
 
-function renderChart(records, metric) {
-  const { timestamps, indexes, rows } = buildWideTable(records, metric);
-  const datasets = indexes.map((idx, i) => ({
-    label: idx,
-    data: rows.map(r => r[idx]),
-    borderColor: palette[i % palette.length],
-    backgroundColor: palette[i % palette.length],
-    tension: 0.25,
-    pointRadius: 3,
-  }));
-
-  if (chartInstance) chartInstance.destroy();
-  const ctx = document.getElementById('chart').getContext('2d');
-  chartInstance = new Chart(ctx, {
-    type: 'line',
-    data: { labels: timestamps, datasets },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { labels: { color: '#DCE6E4', font: { family: 'Consolas', size: 11 } } },
-        title: { display: true, text: metric + ' w czasie — per indeks', color: '#F2F5F4', font: { size: 14 } },
-      },
-      scales: {
-        x: { ticks: { color: '#5C6E6B', font: { size: 10 }, maxRotation: 45, minRotation: 45 }, grid: { color: '#1E2727' } },
-        y: { ticks: { color: '#5C6E6B', font: { size: 10 } }, grid: { color: '#1E2727' } },
-      },
-    },
-  });
-}
-
-function downloadCsv(records, metric) {
-  const { timestamps, indexes, rows } = buildWideTable(records, metric);
-  const header = ['timestamp', ...indexes].join(',');
-  const lines = rows.map(r => [r.timestamp, ...indexes.map(idx => r[idx])].join(','));
-  const csv = [header, ...lines].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'index_usage_' + metric + '.csv';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function handleFile(file) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    parsedRecords = parseText(e.target.result);
-    if (parsedRecords.length === 0) {
-      document.getElementById('status').textContent =
-        'Nie znaleziono żadnych danych — sprawdź format pliku (linie z datą + linie z danymi indeksów).';
-      return;
-    }
-    document.getElementById('status').textContent = '';
-
-    const metrics = uniqueInOrder(parsedRecords.map(r => r.metric));
-    const select = document.getElementById('metricSelect');
-    select.innerHTML = metrics.map(m => `<option value="${m}">${m}</option>`).join('');
-    select.value = metrics.includes('isreads') ? 'isreads' : metrics[0];
-
-    document.getElementById('controls').classList.add('show');
-    document.getElementById('chartBox').classList.add('show');
-    renderChart(parsedRecords, select.value);
-
-    const nIndexes = uniqueInOrder(parsedRecords.map(r => r.index)).length;
-    const nTimestamps = uniqueInOrder(parsedRecords.map(r => r.timestamp)).length;
-    document.getElementById('metaInfo').textContent =
-      `Wczytano ${nTimestamps} znaczników czasu, ${nIndexes} indeksów, ${metrics.length} metryk (${file.name}).`;
-  };
-  reader.onerror = () => {
-    document.getElementById('status').textContent = 'Błąd odczytu pliku.';
-  };
-  reader.readAsText(file);
-}
-
-const dropzone = document.getElementById('dropzone');
-const fileInput = document.getElementById('fileInput');
-
-dropzone.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', (e) => {
-  if (e.target.files[0]) handleFile(e.target.files[0]);
-});
-dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
-dropzone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropzone.classList.remove('drag');
-  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-});
-
-document.getElementById('metricSelect').addEventListener('change', (e) => {
-  renderChart(parsedRecords, e.target.value);
-});
-document.getElementById('downloadCsv').addEventListener('click', () => {
-  const metric = document.getElementById('metricSelect').value;
-  downloadCsv(parsedRecords, metric);
-});
-</script>
-</body>
-</html>
+echo "$(date '+%Y-%m-%d %H:%M:%S') END MP RAPORT ODSTEPSTWA - plik gotowy: $XLS_OUT"
