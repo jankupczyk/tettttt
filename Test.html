@@ -181,26 +181,16 @@ for my $section (@sections) {
     for my $ch (@channels) {
         my ($count, $amount) = $data->{$ch} ? @{$data->{$ch}} : (0, 0);
         print $out " <Row>\n";
-        print $out "  <Cell><Data ss:Type=\"String\">$ch</Data></Cell>\n";
-        print $out "  <Cell ss:StyleID=\"num\"><Data ss:Type=\"Number\">$count</Data></Cell>\n";
-        print $out "  <Cell ss:StyleID=\"amt\"><Data ss:Type=\"Number\">$amount</Data></Cell>\n";
-        print $out " </Row>\n";
-    }
-}
 
-print $out <<'FOOTER';
-</Table>
-</Worksheet>
-</Workbook>
-FOOTER
 
-close $out;
-print "OK: zapisano $out_path\n";
-EOPERL
 
-if [ ! -f "$XLS_OUT" ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') ERROR:: Nie udalo sie wygenerowac $XLS_OUT"
-    exit 1
-fi
 
-echo "$(date '+%Y-%m-%d %H:%M:%S') END MP RAPORT ODSTEPSTWA - plik gotowy: $XLS_OUT"
+  awk '
+function to_sec(t,   a) { split(t, a, ":"); return a[1]*3600 + a[2]*60 + a[3] }
+/- start/ { getline line; sub(/.*Time: */, "", line); start = line }
+/- stop/  { getline line; sub(/.*Time: */, "", line); stop = line
+    diff = to_sec(stop) - to_sec(start)
+    if (diff < 0) diff += 86400
+    printf "%s -> %s  = %02d:%02d:%02d\n", start, stop, int(diff/3600), int(diff%3600/60), diff%60
+}' plik.log
+
