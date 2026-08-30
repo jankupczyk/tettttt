@@ -1,3 +1,27 @@
+
+awk '
+function to_epoch(d, t,   da) {
+    split(d, da, "-")                     # dd-mm-yyyy
+    return mktime(da[3]" "da[2]" "da[1]" "substr(t,1,2)" "substr(t,4,2)" "substr(t,7,2))
+}
+/- start/ {
+    getline line
+    split(line, f, /Date: *|Time: */)
+    d1 = f[2]; sub(/ .*/, "", d1)
+    t1 = f[3]; sub(/ .*/, "", t1)
+}
+/- stop/ {
+    getline line
+    split(line, f, /Date: *|Time: */)
+    d2 = f[2]; sub(/ .*/, "", d2)
+    t2 = f[3]; sub(/ .*/, "", t2)
+
+    diff = to_epoch(d2,t2) - to_epoch(d1,t1)
+    printf "%s  %s -> %s  = %02d:%02d:%02d\n", d1, t1, t2, int(diff/3600), int(diff%3600/60), diff%60
+}' plik.log
+
+
+
 #!/bin/ksh
 
 
