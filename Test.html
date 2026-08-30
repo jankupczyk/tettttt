@@ -1,3 +1,22 @@
+awk '
+function to_sec(t,   a) { split(t, a, ":"); return a[1]*3600 + a[2]*60 + a[3] }
+/- start/ {
+    getline line
+    split(line, f, /Date: *|Time: */)
+    d1 = f[2]; sub(/ .*/, "", d1)
+    t1 = f[3]; sub(/ .*/, "", t1)
+}
+/- stop/ {
+    getline line
+    split(line, f, /Date: *|Time: */)
+    t2 = f[3]; sub(/ .*/, "", t2)
+
+    diff = to_sec(t2) - to_sec(t1)
+    if (diff < 0) diff += 86400        # gdyby przeszło przez północ
+    printf "%s  %s -> %s  = %02d:%02d:%02d\n", d1, t1, t2, int(diff/3600), int(diff%3600/60), diff%60
+}' tesest.*
+
+
 
 awk '
 function to_epoch(d, t,   da) {
