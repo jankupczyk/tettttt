@@ -1,0 +1,143 @@
+#!/usr/bin/perl
+#
+# tuxedo_service_status_json.pl
+#
+# MASTER ITEM dla Zabbixa - odpowiednik "Tuxedo BEA Domain" ale dla uslug (psc).
+# Odpytuje tmadmin "psc" (wszystkie uslugi) lub "psc -s <usluga>" (jesli podano
+# argumenty), i zwraca JSON w formacie zgodnym z Waszym istniejacym wzorcem
+# domenowym: tylko klucz identyfikujacy instancje (SVCKEY ~ odpowiednik
+# DOMAINID) i aktualny status (STATUS: 1 = AVAIL, 0 = inny stan).
+# Zadnych dodatkowych pol - interesuje nas wylacznie biezacy status.
+#
+# Wywolanie:
+#   perl tuxedo_service_status_json.pl                  -> wszystkie uslugi (psc)
+#   perl tuxedo_service_status_json.pl SvcA SvcB ...     -> tylko wskazane uslugi
+#
+# W zabbix_agentd.conf (na hoscie, ktory ma dostep do srodowiska Tuxedo):
+#   UserParameter=custom.tuxedo_service_status,/usr/bin/perl /opt/scripts/tuxedo_service_status_json.pl
+#
+# Master item w Zabbixie:
+#   Type: Zabbix agent
+#   Key:  custom.tuxedo_service_status
+#   Type of information: Text
+#   History: krotko (np. 1h) - to tylko nosnik dla dependent items
+#
+# Dependent item per instancja usługi (analogicznie do "Domain status for salt_1"):
+#   Type: Dependent item
+#   Master item: (powyzszy)
+#   Key: custom.tuxedo_service_status_GetVerSlinkProd_1123[GetVerSlinkProd_1123]
+#   Type of information: Numeric (unsigned)
+#   Preprocessing -> JSONPath:
+#     $.data[?(@.SVCKEY=="GetVerSlinkProd_1123")].STATUS.first()
+#
+# SVCKEY = "<SERVICE>_<ID>" bo w ramach jednej uslugi moze byc kilka instancji
+# (rozne GRPNAME/ID/MACHINE), tak jak widac w psc -s GetVerSlinkProd.
+
+# Tryb pracy:
+#   (brak flagi)   -> MASTER ITEM: {"data":[{"SVCKEY":"...","STATUS":1|0}, ...]}
+#   --discovery    -> LLD RULE:    {"data":[{"{#SVCKEY}":"...","{#SERVICE}":"...",
+#                                             "{#ID}":"...","{#GRPNAME}":"...",
+#                                             "{#MACHINE}":"..."}, ...]}
+#
+# Dzieki temu Zabbix sam wykrywa wszystkie aktywne instancje/watki danej
+# uslugi (kazda instancja ma wlasne ID) i tworzy/usuwa itemy automatycznie
+# wg Item prototype - nie trzeba nic klikac recznie gdy zmieni sie liczba
+# watkow.
+#
+# W zabbix_agentd.conf:
+#   UserParameter=custom.tuxedo_service_status,/usr/bin/perl /opt/scripts/tuxedo_service_status_json.pl
+#   UserParameter=custom.tuxedo_service_discovery,/usr/bin/perl /opt/scripts/tuxedo_service_status_json.pl --discovery
+#
+# Discovery rule w Zabbixie:
+#   Type: Zabbix agent
+#   Key:  custom.tuxedo_service_discovery
+#
+# Item prototype (pod discovery rule):
+#   Name: Service status for {#SERVICE} ({#ID})
+#   Type: Dependent item
+#   Master item: master status item (custom.tuxedo_service_status)
+#   Key: custom.tuxedo_service_status[{#SVCKEY}]
+#   Type of information: Numeric (unsigned)
+#   Preprocessing -> JSONPath:
+#     $.data[?(@.SVCKEY=="{#SVCKEY}")].STATUS.first()
+#
+# Trigger prototype:
+#   last(/Host/custom.tuxedo_service_status[{#SVCKEY}])=0
+
+use strict;
+use warnings;
+use JSON::PP;
+
+my $TMADMIN = $ENV{TUXDIR} ? "$ENV{TUXDIR}/bin/tmadmin"
+                            : "";
+
+my $discovery_mode = 0;
+my @services;
+foreach my $arg (@ARGV) {
+    if ($arg eq "--discovery") { $discovery_mode = 1; }
+    else                       { push @services, $arg; }
+}
+
+my $tmadmin_cmd = @services ? join("", map { "psc -s $_\n" } @services)
+                             : "psc\n";
+
+my $outfile = "/tmp/psc_json_$$.out";
+
+open(my $tm, "| $TMADMIN > $outfile 2>&1") or die "Nie moge odpalic tmadmin: $!";
+print $tm $tmadmin_cmd;
+print $tm "quit\n";
+close($tm);
+
+open(my $fh, "<", $outfile) or die "Nie moge otworzyc $outfile: $!";
+my @lines = <$fh>;
+close($fh);
+unlink $outfile;
+
+my @parsed;
+
+foreach my $line (@lines) {
+    chomp $line;
+    next if $line =~ /^Service Name/;
+    next if $line =~ /^-+\s/;
+    next if $line !~ /\S/;
+    next if $line =~ /^>/;
+
+    my @f = split(/\s+/, $line);
+    next unless @f >= 8;   # Service Routine Prog Grp ID Machine Done Status
+
+    my ($service, $routine, $prog, $grp, $id, $machine, $done, $status) = @f[0..7];
+    next unless $status =~ /^[A-Z]+$/;
+
+    push @parsed, {
+        service => $service,
+        grp     => $grp,
+        id      => $id,
+        machine => $machine,
+        status  => $status,
+    };
+}
+
+if ($discovery_mode) {
+    # LLD - lista instancji do auto-discovery (klucze musza byc {#NAZWA})
+    my @lld;
+    foreach my $r (@parsed) {
+        push @lld, {
+            '{#SVCKEY}'  => "$r->{service}_$r->{id}",
+            '{#SERVICE}' => $r->{service},
+            '{#ID}'      => $r->{id},
+            '{#GRPNAME}' => $r->{grp},
+            '{#MACHINE}' => $r->{machine},
+        };
+    }
+    print encode_json({ data => \@lld });
+} else {
+    # Master item - tylko klucz + aktualny status (1/0)
+    my @records;
+    foreach my $r (@parsed) {
+        push @records, {
+            SVCKEY => "$r->{service}_$r->{id}",
+            STATUS => ($r->{status} eq "AVAIL" ? 1 : 0),
+        };
+    }
+    print encode_json({ data => \@records });
+}
