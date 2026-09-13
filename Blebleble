@@ -141,3 +141,37 @@ if ($discovery_mode) {
     }
     print encode_json({ data => \@records });
 }
+
+
+
+<subsystem xmlns="urn:jboss:domain:undertow:...">
+    <byte-buffer-pool name="default"/>
+    <buffer-cache name="default"/>
+    <server name="default-server">
+        <http-listener .../>
+        <https-listener .../>
+        <host name="default-host" alias="localhost">
+            <http-invoker .../>
+            <!-- TU dodajesz filter-ref, wewnątrz <host> -->
+            <filter-ref name="hsts-header"/>
+            <filter-ref name="xcto-header"/>
+            <filter-ref name="xfo-header"/>
+            <filter-ref name="cc-header"/>
+            <filter-ref name="csp-header"/>
+            <filter-ref name="rp-header"/>
+        </host>
+    </server>
+    <!-- TU dodajesz definicję <filters>, jako sibling <server> -->
+    <filters>
+        <response-header name="hsts-header" header-name="Strict-Transport-Security" header-value="max-age=31536000; includeSubDomains"/>
+        <response-header name="xcto-header" header-name="X-Content-Type-Options" header-value="nosniff"/>
+        <response-header name="xfo-header" header-name="X-Frame-Options" header-value="SAMEORIGIN"/>
+        <response-header name="cc-header" header-name="Cache-Control" header-value="no-store, no-cache, must-revalidate"/>
+        <response-header name="csp-header" header-name="Content-Security-Policy-Report-Only" header-value="default-src 'self'"/>
+        <response-header name="rp-header" header-name="Referrer-Policy" header-value="strict-origin-when-cross-origin"/>
+    </filters>
+    <servlet-container name="default">
+        ...
+    </servlet-container>
+</subsystem>
+
