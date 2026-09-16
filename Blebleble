@@ -1,177 +1,50 @@
-#!/usr/bin/perl
-#
-# tuxedo_service_status_json.pl
-#
-# MASTER ITEM dla Zabbixa - odpowiednik "Tuxedo BEA Domain" ale dla uslug (psc).
-# Odpytuje tmadmin "psc" (wszystkie uslugi) lub "psc -s <usluga>" (jesli podano
-# argumenty), i zwraca JSON w formacie zgodnym z Waszym istniejacym wzorcem
-# domenowym: tylko klucz identyfikujacy instancje (SVCKEY ~ odpowiednik
-# DOMAINID) i aktualny status (STATUS: 1 = AVAIL, 0 = inny stan).
-# Zadnych dodatkowych pol - interesuje nas wylacznie biezacy status.
-#
-# Wywolanie:
-#   perl tuxedo_service_status_json.pl                  -> wszystkie uslugi (psc)
-#   perl tuxedo_service_status_json.pl SvcA SvcB ...     -> tylko wskazane uslugi
-#
-# W zabbix_agentd.conf (na hoscie, ktory ma dostep do srodowiska Tuxedo):
-#   UserParameter=custom.tuxedo_service_status,/usr/bin/perl /opt/scripts/tuxedo_service_status_json.pl
-#
-# Master item w Zabbixie:
-#   Type: Zabbix agent
-#   Key:  custom.tuxedo_service_status
-#   Type of information: Text
-#   History: krotko (np. 1h) - to tylko nosnik dla dependent items
-#
-# Dependent item per instancja usługi (analogicznie do "Domain status for salt_1"):
-#   Type: Dependent item
-#   Master item: (powyzszy)
-#   Key: custom.tuxedo_service_status_GetVerSlinkProd_1123[GetVerSlinkProd_1123]
-#   Type of information: Numeric (unsigned)
-#   Preprocessing -> JSONPath:
-#     $.data[?(@.SVCKEY=="GetVerSlinkProd_1123")].STATUS.first()
-#
-# SVCKEY = "<SERVICE>_<ID>" bo w ramach jednej uslugi moze byc kilka instancji
-# (rozne GRPNAME/ID/MACHINE), tak jak widac w psc -s GetVerSlinkProd.
+#!/bin/bash
+# Usage: ./sprawdz_redukcje.sh /sciezka/do/backupow
 
-# Tryb pracy:
-#   (brak flagi)   -> MASTER ITEM: {"data":[{"SVCKEY":"...","STATUS":1|0}, ...]}
-#   --discovery    -> LLD RULE:    {"data":[{"{#SVCKEY}":"...","{#SERVICE}":"...",
-#                                             "{#ID}":"...","{#GRPNAME}":"...",
-#                                             "{#MACHINE}":"..."}, ...]}
-#
-# Dzieki temu Zabbix sam wykrywa wszystkie aktywne instancje/watki danej
-# uslugi (kazda instancja ma wlasne ID) i tworzy/usuwa itemy automatycznie
-# wg Item prototype - nie trzeba nic klikac recznie gdy zmieni sie liczba
-# watkow.
-#
-# W zabbix_agentd.conf:
-#   UserParameter=custom.tuxedo_service_status,/usr/bin/perl /opt/scripts/tuxedo_service_status_json.pl
-#   UserParameter=custom.tuxedo_service_discovery,/usr/bin/perl /opt/scripts/tuxedo_service_status_json.pl --discovery
-#
-# Discovery rule w Zabbixie:
-#   Type: Zabbix agent
-#   Key:  custom.tuxedo_service_discovery
-#
-# Item prototype (pod discovery rule):
-#   Name: Service status for {#SERVICE} ({#ID})
-#   Type: Dependent item
-#   Master item: master status item (custom.tuxedo_service_status)
-#   Key: custom.tuxedo_service_status[{#SVCKEY}]
-#   Type of information: Numeric (unsigned)
-#   Preprocessing -> JSONPath:
-#     $.data[?(@.SVCKEY=="{#SVCKEY}")].STATUS.first()
-#
-# Trigger prototype:
-#   last(/Host/custom.tuxedo_service_status[{#SVCKEY}])=0
+DIR="${1:-.}"
 
-use strict;
-use warnings;
-use JSON::PP;
+list_archive() {
+    local archive="$1"
+    # Rozpoznajemy typ po realnej zawartości pliku, nie po rozszerzeniu
+    local ftype
+    ftype=$(file -b "$archive")
 
-my $TMADMIN = $ENV{TUXDIR} ? "$ENV{TUXDIR}/bin/tmadmin"
-                            : "";
-
-my $discovery_mode = 0;
-my @services;
-foreach my $arg (@ARGV) {
-    if ($arg eq "--discovery") { $discovery_mode = 1; }
-    else                       { push @services, $arg; }
+    case "$ftype" in
+        *"gzip compressed"*"tar archive"*|*"POSIX tar archive"*)
+            # zwykły tar lub tar spakowany gzipem - tar sam wykrywa kompresję
+            tar -tvf "$archive" 2>/dev/null
+            ;;
+        *"gzip compressed data"*)
+            # sam gzip (nie tar) - rzadki przypadek, ale na wszelki wypadek
+            echo "SKIP: $archive to pojedynczy gzip, nie archiwum tar"
+            ;;
+        *"Zip archive"*)
+            unzip -l "$archive" 2>/dev/null | awk 'NR>3 {print $1, $4}' 
+            ;;
+        *)
+            echo "SKIP: nieznany typ dla $archive ($ftype)" >&2
+            ;;
+    esac
 }
 
-my $tmadmin_cmd = @services ? join("", map { "psc -s $_\n" } @services)
-                             : "psc\n";
+for archive in "$DIR"/*; do
+    [ -f "$archive" ] || continue
+    base=$(basename "$archive")
+    # akceptuj tylko pliki wygladajace jak <rok>-<miesiac>.cokolwiek
+    [[ "$base" =~ ^[0-9]{4}-[0-9]{2}\. ]] || continue
 
-my $outfile = "/tmp/psc_json_$$.out";
-
-open(my $tm, "| $TMADMIN > $outfile 2>&1") or die "Nie moge odpalic tmadmin: $!";
-print $tm $tmadmin_cmd;
-print $tm "quit\n";
-close($tm);
-
-open(my $fh, "<", $outfile) or die "Nie moge otworzyc $outfile: $!";
-my @lines = <$fh>;
-close($fh);
-unlink $outfile;
-
-my @parsed;
-
-foreach my $line (@lines) {
-    chomp $line;
-    next if $line =~ /^Service Name/;
-    next if $line =~ /^-+\s/;
-    next if $line !~ /\S/;
-    next if $line =~ /^>/;
-
-    my @f = split(/\s+/, $line);
-    next unless @f >= 8;   # Service Routine Prog Grp ID Machine Done Status
-
-    my ($service, $routine, $prog, $grp, $id, $machine, $done, $status) = @f[0..7];
-    next unless $status =~ /^[A-Z]+$/;
-
-    push @parsed, {
-        service => $service,
-        grp     => $grp,
-        id      => $id,
-        machine => $machine,
-        status  => $status,
-    };
-}
-
-if ($discovery_mode) {
-    # LLD - lista instancji do auto-discovery (klucze musza byc {#NAZWA})
-    my @lld;
-    foreach my $r (@parsed) {
-        push @lld, {
-            '{#SVCKEY}'  => "$r->{service}_$r->{id}",
-            '{#SERVICE}' => $r->{service},
-            '{#ID}'      => $r->{id},
-            '{#GRPNAME}' => $r->{grp},
-            '{#MACHINE}' => $r->{machine},
-        };
-    }
-    print encode_json({ data => \@lld });
-} else {
-    # Master item - tylko klucz + aktualny status (1/0)
-    my @records;
-    foreach my $r (@parsed) {
-        push @records, {
-            SVCKEY => "$r->{service}_$r->{id}",
-            STATUS => ($r->{status} eq "AVAIL" ? 1 : 0),
-        };
-    }
-    print encode_json({ data => \@records });
-}
-
-
-
-<subsystem xmlns="urn:jboss:domain:undertow:...">
-    <byte-buffer-pool name="default"/>
-    <buffer-cache name="default"/>
-    <server name="default-server">
-        <http-listener .../>
-        <https-listener .../>
-        <host name="default-host" alias="localhost">
-            <http-invoker .../>
-            <!-- TU dodajesz filter-ref, wewnątrz <host> -->
-            <filter-ref name="hsts-header"/>
-            <filter-ref name="xcto-header"/>
-            <filter-ref name="xfo-header"/>
-            <filter-ref name="cc-header"/>
-            <filter-ref name="csp-header"/>
-            <filter-ref name="rp-header"/>
-        </host>
-    </server>
-    <!-- TU dodajesz definicję <filters>, jako sibling <server> -->
-    <filters>
-        <response-header name="hsts-header" header-name="Strict-Transport-Security" header-value="max-age=31536000; includeSubDomains"/>
-        <response-header name="xcto-header" header-name="X-Content-Type-Options" header-value="nosniff"/>
-        <response-header name="xfo-header" header-name="X-Frame-Options" header-value="SAMEORIGIN"/>
-        <response-header name="cc-header" header-name="Cache-Control" header-value="no-store, no-cache, must-revalidate"/>
-        <response-header name="csp-header" header-name="Content-Security-Policy-Report-Only" header-value="default-src 'self'"/>
-        <response-header name="rp-header" header-name="Referrer-Policy" header-value="strict-origin-when-cross-origin"/>
-    </filters>
-    <servlet-container name="default">
-        ...
-    </servlet-container>
-</subsystem>
-
+    list_archive "$archive" | grep -E 'redukcja_test\.[0-9]+' | \
+    while read -r line; do
+        # dla tar: linia typu "perms owner/grp size data godzina sciezka"
+        # dla unzip -l: linia typu "size sciezka"
+        sz=$(echo "$line" | awk '{
+            for(i=1;i<=NF;i++) if ($i ~ /^[0-9]+$/) { print $i; exit }
+        }')
+        nm=$(echo "$line" | awk '{print $NF}')
+        if [ -n "$sz" ] && [ "$sz" -le 38 ] 2>/dev/null; then
+            echo "PUSTY   ($sz B)  -> $archive :: $nm"
+        else
+            echo "MA DANE ($sz B)  -> $archive :: $nm"
+        fi
+    done
+done
