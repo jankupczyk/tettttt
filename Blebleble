@@ -1,1 +1,4 @@
 SID=$(onstat -g ath | awk '$3=="running"{print $0}' | sort -rn -k6 | head -1 | awk '{print $4}'); onstat -g sql $SID
+
+
+onstat -g act | awk '/running/{print $3}' | sort -u | while read R; do S=$(onstat -u | grep -F "$R" | awk '{print $3}'); [ -n "$S" ] && echo "=== sid $S (rstcb $R) ===" && onstat -g sql $S | sed -n '/^Sess/,$p'; done
