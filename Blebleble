@@ -1,4 +1,1 @@
-onstat -g cpu > /tmp/c1.$$; sleep 5; onstat -g cpu > /tmp/c2.$$; awk '{tid=$1; if(tid!~/^[0-9]+$/)next; c=""; for(i=1;i<=NF;i++){if($i~/^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/){c=$(i+1);break}} if(c=="")next; if(NR==FNR){a[tid]=c;next} if(tid in a){d=c-a[tid]; if(d>0.3) printf "%.2f %s\n", d, tid}}' /tmp/c1.$$ /tmp/c2.$$ | sort -rn | head -10; rm -f /tmp/c1.$$ /tmp/c2.$$
-
-
-onstat -g act | awk -v t="9" '$1==t{print $3}'
+for T in 140173111 140172961 140172423 140168535; do R=$(onstat -g act | awk -v t="$T" '$1==t{print $3}'); [ -z "$R" ] && { echo "tid $T no running, skipped..."; continue; }; S=$(onstat -u | grep -F "$R" | awk '{print $3}'); [ -z "$S" ] && continue; echo "=== tid $T -> sid $S ==="; onstat -g sql $S | sed -n '/^Sess/,$p'; done
