@@ -2,3 +2,12 @@ SID=$(onstat -g ath | awk '$3=="running"{print $0}' | sort -rn -k6 | head -1 | a
 
 
 onstat -g act | awk '/running/{print $3}' | sort -u | while read R; do S=$(onstat -u | grep -F "$R" | awk '{print $3}'); [ -n "$S" ] && echo "=== sid $S (rstcb $R) ===" && onstat -g sql $S | sed -n '/^Sess/,$p'; done
+
+
+onstat -g act | awk '/running/{print $3}' | sort -u | while read R; do L=$(onstat -u | grep -F "$R"); U=$(echo "$L" | awk '{print $4}'); [ "$U" = "test" ] && S=$(echo "$L" | awk '{print $3}') && echo "=== sid $S ===" && onstat -g sql $S | sed -n '/^Sess/,$p'; done
+
+
+lparstat 1 1; echo "---"; onstat -g glo | sed -n '/Individual virtual/,$p' | head -40
+
+
+while true; do onstat -g act | awk '/running/{print $3}' | sort -u | while read R; do S=$(onstat -u | grep -F "$R" | awk '{print $3}'); [ -n "$S" ] && echo "$(date +%T) sid=$S"; done; sleep 3; done
