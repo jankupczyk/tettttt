@@ -1,1 +1,15 @@
-for T in 140173111 140172961 140172423 140168535; do R=$(onstat -g act | awk -v t="$T" '$1==t{print $3}'); [ -z "$R" ] && { echo "tid $T no running, skipped..."; continue; }; S=$(onstat -u | grep -F "$R" | awk '{print $3}'); [ -z "$S" ] && continue; echo "=== tid $T -> sid $S ==="; onstat -g sql $S | sed -n '/^Sess/,$p'; done
+DECLARE @SearchWord NVARCHAR(200) = N'twoj_hostname';
+DECLARE @Results TABLE (SchemaName NVARCHAR(128), TableName NVARCHAR(128), ColumnName NVARCHAR(128));
+DECLARE @SQL NVARCHAR(MAX) = N'';
+
+SELECT @SQL = @SQL + 
+    'IF EXISTS (SELECT 1 FROM [' + s.name + '].[' + t.name + '] WHERE [' + c.name + '] LIKE ''%' + @SearchWord + '%'') ' +
+    'INSERT INTO @Results VALUES (''' + s.name + ''', ''' + t.name + ''', ''' + c.name + ''');' + CHAR(13)
+FROM sys.tables t
+INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+INNER JOIN sys.columns c ON t.object_id = c.object_id
+INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+WHERE ty.name IN ('varchar', 'nvarchar', 'char', 'nchar', 'text', 'ntext')
+
+EXEC sp_executesql @SQL;
+SELECT * FROM @Results;
