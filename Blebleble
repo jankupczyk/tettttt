@@ -1,31 +1,37 @@
-DECLARE @SearchWord NVARCHAR(200) = N'twoj_hostname'; -- <<< wpisz szukaną frazę
+DECLARE @SearchWord NVARCHAR(200) = N'twoj_hostname';
+DECLARE @DbName NVARCHAR(128);
+DECLARE @SQL NVARCHAR(MAX);
 
-IF OBJECT_ID('tempdb..#Results') IS NOT NULL DROP TABLE #Results;
-CREATE TABLE #Results (
-    DatabaseName NVARCHAR(128),
-    SchemaName NVARCHAR(128),
-    TableName NVARCHAR(128),
-    ColumnName NVARCHAR(128)
-);
+DECLARE db_cursor CURSOR FOR
+    SELECT name FROM sys.databases
+    WHERE database_id > 4
+    AND state = 0;
 
-EXEC sp_MSforeachdb '
-USE [?];
-IF DB_ID(''?'') > 4 -- pomija systemowe: master, tempdb, model, msdb
+OPEN db_cursor;
+FETCH NEXT FROM db_cursor INTO @DbName;
+
+WHILE @@FETCH_STATUS = 0
 BEGIN
-    DECLARE @SQL NVARCHAR(MAX) = N'''';
+    SET @SQL = N'
+    USE [' + @DbName + N'];
+    DECLARE @InnerSQL NVARCHAR(MAX) = N'''';
 
-    SELECT @SQL = @SQL + 
-        ''IF EXISTS (SELECT 1 FROM ['' + s.name + ''].['' + t.name + ''] WHERE ['' + c.name + ''] LIKE ''''%' + @SearchWord + '''''''') '' +
-        ''INSERT INTO #Results VALUES (''''?'''', '''''' + s.name + '''''', '''''' + t.name + '''''', '''''' + c.name + '''''');'' + CHAR(13)
+    SELECT @InnerSQL = @InnerSQL + 
+        N''IF EXISTS (SELECT 1 FROM ['' + s.name + N''].['' + t.name + N''] WHERE ['' + c.name + N''] LIKE ''''%' + @SearchWord + N'%'''') ''
+        + N''PRINT ''''Znaleziono w: [' + @DbName + N'].['' + s.name + N''].['' + t.name + N''].['' + c.name + N'']'''';'' + CHAR(13)
     FROM sys.tables t
     INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
     INNER JOIN sys.columns c ON t.object_id = c.object_id
     INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
-    WHERE ty.name IN (''varchar'', ''nvarchar'', ''char'', ''nchar'', ''text'', ''ntext'')
+    WHERE ty.name IN (N''varchar'', N''nvarchar'', N''char'', N''nchar'', N''text'', N''ntext'');
+
+    EXEC sp_executesql @InnerSQL;
+    ';
 
     EXEC sp_executesql @SQL;
-END
-';
 
-SELECT * FROM #Results;
-DROP TABLE #Results;
+    FETCH NEXT FROM db_cursor INTO @DbName;
+END
+
+CLOSE db_cursor;
+DEALLOCATE db_cursor;
