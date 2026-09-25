@@ -1,15 +1,31 @@
-DECLARE @SearchWord NVARCHAR(200) = N'twoj_hostname';
-DECLARE @Results TABLE (SchemaName NVARCHAR(128), TableName NVARCHAR(128), ColumnName NVARCHAR(128));
-DECLARE @SQL NVARCHAR(MAX) = N'';
+DECLARE @SearchWord NVARCHAR(200) = N'twoj_hostname'; -- <<< wpisz szukaną frazę
 
-SELECT @SQL = @SQL + 
-    'IF EXISTS (SELECT 1 FROM [' + s.name + '].[' + t.name + '] WHERE [' + c.name + '] LIKE ''%' + @SearchWord + '%'') ' +
-    'INSERT INTO @Results VALUES (''' + s.name + ''', ''' + t.name + ''', ''' + c.name + ''');' + CHAR(13)
-FROM sys.tables t
-INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-INNER JOIN sys.columns c ON t.object_id = c.object_id
-INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
-WHERE ty.name IN ('varchar', 'nvarchar', 'char', 'nchar', 'text', 'ntext')
+IF OBJECT_ID('tempdb..#Results') IS NOT NULL DROP TABLE #Results;
+CREATE TABLE #Results (
+    DatabaseName NVARCHAR(128),
+    SchemaName NVARCHAR(128),
+    TableName NVARCHAR(128),
+    ColumnName NVARCHAR(128)
+);
 
-EXEC sp_executesql @SQL;
-SELECT * FROM @Results;
+EXEC sp_MSforeachdb '
+USE [?];
+IF DB_ID(''?'') > 4 -- pomija systemowe: master, tempdb, model, msdb
+BEGIN
+    DECLARE @SQL NVARCHAR(MAX) = N'''';
+
+    SELECT @SQL = @SQL + 
+        ''IF EXISTS (SELECT 1 FROM ['' + s.name + ''].['' + t.name + ''] WHERE ['' + c.name + ''] LIKE ''''%' + @SearchWord + '''''''') '' +
+        ''INSERT INTO #Results VALUES (''''?'''', '''''' + s.name + '''''', '''''' + t.name + '''''', '''''' + c.name + '''''');'' + CHAR(13)
+    FROM sys.tables t
+    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+    INNER JOIN sys.columns c ON t.object_id = c.object_id
+    INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+    WHERE ty.name IN (''varchar'', ''nvarchar'', ''char'', ''nchar'', ''text'', ''ntext'')
+
+    EXEC sp_executesql @SQL;
+END
+';
+
+SELECT * FROM #Results;
+DROP TABLE #Results;
