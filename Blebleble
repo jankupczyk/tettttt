@@ -1,37 +1,7 @@
-DECLARE @SearchWord NVARCHAR(200) = N'twoj_hostname';
-DECLARE @DbName NVARCHAR(128);
-DECLARE @SQL NVARCHAR(MAX);
-
-DECLARE db_cursor CURSOR FOR
-    SELECT name FROM sys.databases
-    WHERE database_id > 4
-    AND state = 0;
-
-OPEN db_cursor;
-FETCH NEXT FROM db_cursor INTO @DbName;
-
-WHILE @@FETCH_STATUS = 0
-BEGIN
-    SET @SQL = N'
-    USE [' + @DbName + N'];
-    DECLARE @InnerSQL NVARCHAR(MAX) = N'''';
-
-    SELECT @InnerSQL = @InnerSQL + 
-        N''IF EXISTS (SELECT 1 FROM ['' + s.name + N''].['' + t.name + N''] WHERE ['' + c.name + N''] LIKE ''''%' + @SearchWord + N'%'''') ''
-        + N''PRINT ''''Znaleziono w: [' + @DbName + N'].['' + s.name + N''].['' + t.name + N''].['' + c.name + N'']'''';'' + CHAR(13)
-    FROM sys.tables t
-    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-    INNER JOIN sys.columns c ON t.object_id = c.object_id
-    INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
-    WHERE ty.name IN (N''varchar'', N''nvarchar'', N''char'', N''nchar'', N''text'', N''ntext'');
-
-    EXEC sp_executesql @InnerSQL;
-    ';
-
-    EXEC sp_executesql @SQL;
-
-    FETCH NEXT FROM db_cursor INTO @DbName;
-END
-
-CLOSE db_cursor;
-DEALLOCATE db_cursor;
+EXEC sp_MSforeachdb 'USE [?];
+SELECT DB_NAME() AS db, dp.name, dp.type_desc
+FROM sys.database_principals dp
+LEFT JOIN sys.server_principals sp ON dp.sid = sp.sid
+WHERE sp.sid IS NULL
+  AND dp.type IN (''U'',''G'')
+  AND dp.name = ''NT AUTHORITY\NETWORK SERVICE'';'
