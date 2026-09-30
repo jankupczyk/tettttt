@@ -1,11 +1,8 @@
-tr 'a-z' 'A-Z' < procs.sql | nawk '
-/CREATE.*(PROCEDURE|FUNCTION)/ { if (name != "") print w+inf*10, "WHILE=" w, "INF=" inf, "EXIT=" ex, "CONT=" co, "FOREACH=" fe, name; name=$0; w=0; inf=0; ex=0; co=0; fe=0; next }
-/EXIT WHILE/     { ex++ }
-/CONTINUE WHILE/ { co++ }
-/END WHILE/      { next }
-/WHILE/          { w++ }
-/WHILE *\(? *1 *= *1/  { inf++ }
-/WHILE *\(? *TRUE/     { inf++ }
-/FOREACH/        { fe++ }
-END { print w+inf*10, "WHILE=" w, "INF=" inf, "EXIT=" ex, "CONT=" co, "FOREACH=" fe, name }
-' | sort -rn | head -50 > ranking.txt
+SELECT s.sid, s.username, s.hostname, a.sesapp_name, a.sesapp_value
+FROM sysmaster:syssessions s
+JOIN sysmaster:syssesappinfo a ON a.sesapp_sid = s.sid;
+
+
+SELECT sql_sid, sql_uid, sql_stmt, sql_runtime, sql_totaltime
+FROM sysmaster:syssqltrace
+ORDER BY sql_runtime DESC;
