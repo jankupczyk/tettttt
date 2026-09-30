@@ -1,7 +1,8 @@
-EXEC sp_MSforeachdb 'USE [?];
-SELECT DB_NAME() AS db, dp.name, dp.type_desc
-FROM sys.database_principals dp
-LEFT JOIN sys.server_principals sp ON dp.sid = sp.sid
-WHERE sp.sid IS NULL
-  AND dp.type IN (''U'',''G'')
-  AND dp.name = ''NT AUTHORITY\NETWORK SERVICE'';'
+SELECT DISTINCT p.owner, p.procname
+FROM sysprocedures p
+JOIN sysprocbody b ON b.procid = p.procid
+WHERE b.datakey = 'T'
+  AND (UPPER(b.data) LIKE '%END WHILE%'
+    OR UPPER(b.data) LIKE '%END FOR%'
+    OR UPPER(b.data) LIKE '%END FOREACH%')
+ORDER BY 1, 2;
