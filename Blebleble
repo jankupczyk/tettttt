@@ -1,11 +1,24 @@
-SELECT t.sql_sid, t.sql_uid, s.username, s.hostname, t.sql_database,
-       t.sql_stmt, t.sql_runtime, t.sql_totaltime, t.sql_finishtime
-FROM sysmaster:syssqltrace t
-JOIN sysmaster:syssessions s ON s.sid = t.sql_sid
-WHERE t.sql_uid = 457
-ORDER BY t.sql_totaltime DESC;
-
-
-SELECT sid, username, uid, hostname, pid, feprogram, connected
-FROM sysmaster:syssessions
-WHERE uid = 457;
+<Connector port="8443" 
+           URIEncoding="UTF-8" 
+           maxHttpHeaderSize="8192"
+           xpoweredBy="false" 
+           server="Secure"
+           maxThreads="200" 
+           minSpareThreads="25" 
+           maxSpareThreads="75"
+           enableLookups="false" 
+           disableUploadTimeout="true"
+           acceptCount="100" 
+           scheme="https" 
+           secure="true"
+           SSLEnabled="true" 
+           clientAuth="false" 
+           useBodyEncodingForURI="true">
+           
+    <SSLHostConfig sslProtocol="TLS">
+        <Certificate certificateKeystoreFile="" 
+                     certificateKeystorePassword="changeit"
+                     certificateKeystoreType="PKCS12" />
+    </SSLHostConfig>
+    
+</Connector>
