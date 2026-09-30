@@ -1,8 +1,15 @@
-SELECT DISTINCT p.owner, p.procname
-FROM sysprocedures p
-JOIN sysprocbody b ON b.procid = p.procid
-WHERE b.datakey = 'T'
-  AND (UPPER(b.data) LIKE '%END WHILE%'
-    OR UPPER(b.data) LIKE '%END FOR%'
-    OR UPPER(b.data) LIKE '%END FOREACH%')
-ORDER BY 1, 2;
+awk '
+function out() { 
+    score = inf*10 + (w > ex ? (w-ex)*5 : 0) + w*2 + nested*3 + fe
+    if (score > 0) printf "%d\tWHILE=%d INF=%d EXIT=%d CONT=%d FOREACH=%d\t%s\n", score, w, inf, ex, co, fe, name
+}
+{ u = toupper($0) }
+u ~ /^ *--/ { next }
+u ~ /^ *CREATE (DBA )?(PROCEDURE|FUNCTION)/ { if (name) out(); name=$0; w=inf=ex=co=fe=nested=depth=0 }
+u ~ /END WHILE|END FOREACH/ { if (depth>0) depth--; next }
+u ~ /EXIT WHILE/ { ex++ }
+u ~ /CONTINUE WHILE/ { co++ }
+u ~ /(^|[^A-Z_])WHILE/ { w++; if (u ~ /WHILE *\(? *(1 *= *1|1|TRUE|.T.) *\)? *$/) inf++ }
+u ~ /(^|[^A-Z_])FOREACH/ { fe++; if (depth>0) nested++; depth++ }
+END { out() }
+' procs.sql | sort -rn > ranking.txt
