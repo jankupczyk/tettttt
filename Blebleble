@@ -1,8 +1,11 @@
-SELECT s.sid, s.username, s.hostname, a.sesapp_name, a.sesapp_value
-FROM sysmaster:syssessions s
-JOIN sysmaster:syssesappinfo a ON a.sesapp_sid = s.sid;
+SELECT t.sql_sid, t.sql_uid, s.username, s.hostname, t.sql_database,
+       t.sql_stmt, t.sql_runtime, t.sql_totaltime, t.sql_finishtime
+FROM sysmaster:syssqltrace t
+JOIN sysmaster:syssessions s ON s.sid = t.sql_sid
+WHERE t.sql_uid = 457
+ORDER BY t.sql_totaltime DESC;
 
 
-SELECT sql_sid, sql_uid, sql_stmt, sql_runtime, sql_totaltime
-FROM sysmaster:syssqltrace
-ORDER BY sql_runtime DESC;
+SELECT sid, username, uid, hostname, pid, feprogram, connected
+FROM sysmaster:syssessions
+WHERE uid = 457;
