@@ -1,24 +1,25 @@
-<Connector port="8443" 
-           URIEncoding="UTF-8" 
-           maxHttpHeaderSize="8192"
-           xpoweredBy="false" 
-           server="Secure"
-           maxThreads="200" 
-           minSpareThreads="25" 
-           maxSpareThreads="75"
-           enableLookups="false" 
-           disableUploadTimeout="true"
-           acceptCount="100" 
-           scheme="https" 
-           secure="true"
-           SSLEnabled="true" 
-           clientAuth="false" 
-           useBodyEncodingForURI="true">
-           
-    <SSLHostConfig sslProtocol="TLS">
-        <Certificate certificateKeystoreFile="" 
-                     certificateKeystorePassword="changeit"
-                     certificateKeystoreType="PKCS12" />
-    </SSLHostConfig>
-    
-</Connector>
+function flush() {
+  if (stmt != "")
+    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", \
+      rt,maxt,iow,lwt,lw,pr,br,sqle,isame,ft,proc,tbl,stmt":"sess
+}
+/^ *Statement #/ {
+  flush()
+  stmt=$3; sub(":","",stmt)
+  proc="-"; tbl="-"; rt=0; maxt=0; iow=0; lwt=0; lw=0; pr=0; br=0
+  sqle=0; isame=0; ft="-"; sess="-"
+}
+/Procedure Call Stack:/ {getline; gsub(/^ +/,""); proc=$1}
+/using table/ {tbl=$0; sub(/.*\[ */,"",tbl); sub(/ *\].*/,"",tbl)}
+/^ *Sess_id/ {getline; sess=$1
+  for(i=1;i<=NF;i++) if($i ~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/){ft=$i; rt=$(i+1); break}}
+/^ *Read +Read +% Cache/ {getline; pr=$1; br=$2}
+/^ *Requests +Waits/ {getline; lw=$2; lwt=$3}
+/^ *Executions +Time/ {getline; maxt=$4; iow=$6}
+/^ *Cost +Rows +Rows/ {getline; sqle=$4; isame=$5}
+END {flush()}
+
+
+LC_ALL=C awk -f parse.awk sample.txt > out_sample.tsv
+head -5 out_sample.tsv
+awk -F'\t' '{print NF}' out_sample.tsv | sort | uniq -c
