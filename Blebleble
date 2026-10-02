@@ -23,3 +23,15 @@ END {flush()}
 LC_ALL=C awk -f parse.awk sample.txt > out_sample.tsv
 head -5 out_sample.tsv
 awk -F'\t' '{print NF}' out_sample.tsv | sort | uniq -c
+
+
+LC_ALL=C nohup awk -f parse.awk sqltrace.1300 > out.tsv 2> parse.err &
+
+# rozkład godzinowy (czy w ogóle są niezerowe czasy)
+awk -F'\t' '{h=substr($10,1,2); t[h]+=$1; n[h]++} END{for(h in t) print h, n[h], t[h]}' out.tsv | sort
+
+# top 50 najdłuższych
+sort -T /drives/c/D/tmp -t$'\t' -k1,1nr out.tsv | head -50
+
+# suma czasu i liczba wykonań wg procedury
+awk -F'\t' '{t[$11]+=$1; n[$11]++} END{for(p in t) printf "%.2f\t%d\t%s\n", t[p], n[p], p}' out.tsv | sort -nr | head -30
